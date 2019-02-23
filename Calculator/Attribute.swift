@@ -28,7 +28,20 @@ public enum AttributionError : Error {
 
 //typealias Dice = (count: Int, sides: Int)
 
-public struct Attribute<T> {
+public protocol Attributable {
+    func rawValue() -> Any
+    func asInt() throws -> Int
+    func asString() throws -> String
+    func asBool() throws -> Bool
+    func asDice() throws -> Dice
+    func asAddress() throws -> Address
+    func asAttribution() throws -> Attribution
+    func asDistribution<E: Equatable>(of: E.Type) throws -> Distribution<E>
+    func asType<E>(_ type: E.Type) throws -> E
+    func isEqual(other: Attributable) -> Bool
+}
+
+public struct Attribute<T> : Attributable {
     let valueType: Any.Type
     let value: T
     
@@ -43,8 +56,15 @@ public struct Attribute<T> {
             : AttributionError.invalidDereference(error: "For \(self.valueType), requested: \(requested).")
     }
     
-    func rawValue() -> T {
+    public func rawValue() -> Any {
         return value
+    }
+    
+    public func asType<E>(_ type: E.Type) throws -> E {
+        if let error = validate(requested: type) {
+            throw error
+        }
+        return (value as! E)
     }
     
     public func asInt() throws -> Int {
@@ -68,14 +88,14 @@ public struct Attribute<T> {
         return (value as! Bool)
     }
     
-    func asDice() throws -> Dice {
+    public func asDice() throws -> Dice {
         if let error = validate(requested: Dice.self) {
             throw error
         }
         return (value as! Dice)
     }
     
-    func asAddress() throws -> Address {
+    public func asAddress() throws -> Address {
         if let error = validate(requested: Address.self) {
             throw error
         }
@@ -87,6 +107,13 @@ public struct Attribute<T> {
             throw error
         }
         return (value as! Attribution)
+    }
+    
+    public func asDistribution<E: Equatable>(of: E.Type) throws -> Distribution<E> {
+        if let error = validate(requested: Distribution<E>.self) {
+            throw error
+        }
+        return (value as! Distribution<E>)
     }
     
 //    public func asAction() throws -> Action {
@@ -104,28 +131,30 @@ public struct Attribute<T> {
         return lhsEquatable == rhsEquatable
     }
     
-    public func isEqual(other: Attribute) -> Bool {
-        guard valueType == other.valueType else {
+    public func isEqual(other: Attributable) -> Bool {
+        let otherValue = other.rawValue()
+        
+        guard valueType == type(of: otherValue as Any) else {
             return false
         }
         
         if (self.valueType == Int.self) {
-            return Attribute.equalAny(lhv: self.value, rhv: other.value, baseType: Int.self)
+            return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Int.self)
         }
         else if (self.valueType == String.self) {
-            return Attribute.equalAny(lhv: self.value, rhv: other.value, baseType: String.self)
+            return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: String.self)
         }
         else if (self.valueType == Bool.self) {
-            return Attribute.equalAny(lhv: self.value, rhv: other.value, baseType: Bool.self)
+            return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Bool.self)
         }
         else if (self.valueType == Dice.self) {
-            return Attribute.equalAny(lhv: self.value, rhv: other.value, baseType: Dice.self)
+            return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Dice.self)
         }
         else if (self.valueType == Address.self) {
-            return Attribute.equalAny(lhv: self.value, rhv: other.value, baseType: Address.self)
+            return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Address.self)
         }
         else if (self.valueType == Attribution.self) {
-            return Attribute.equalAny(lhv: self.value, rhv: other.value, baseType: Attribution.self)
+            return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Attribution.self)
         }
         else {      // NB: can't compare generic Distribution-type attributes
 //            return Attribute.equalAny(lhv: self.value, rhv: other.value, baseType: Distribution<T>.self)
@@ -155,9 +184,9 @@ public struct Distribution<T: Equatable>: Equatable {
         get { return members.last! }
     }
     
-    public init?(members: Membership<T>) {
+    public init(members: Membership<T>) throws {
         guard validate(members) else {
-            return nil
+            throw AttributionError.invalidDistribution(error: "invalid membership")
         }
         self.members = members
     }
@@ -184,13 +213,13 @@ public struct Distribution<T: Equatable>: Equatable {
     }
     
     public func select() -> T {
-        let selector = Calculator<T>.rand(self.last.weight)     // e.g. 0 - 99
+        let selector = Calculator.rand(self.last.weight)     // e.g. 0 - 99
         for member in self.members {
             if (member.weight >= selector) {
                 return member.value
             }
         }
-        return self.last.value                                  // should never happen
+        return self.last.value                              // should never happen
     }
     
     public static func ==(lhs: Distribution, rhs: Distribution) -> Bool {
@@ -207,7 +236,7 @@ public struct Distribution<T: Equatable>: Equatable {
     }
 }
 
-class Address : Equatable {
+public class Address : Equatable {
     private let key: String
     private let path: [String]
     
@@ -254,19 +283,19 @@ class Address : Equatable {
     }
     
     // NB: store a nil value => delete key from Attribution
-    func store<T: Equatable>(value: T?, args: Attribution) throws {
+    func store(value: Attributable?, args: Attribution) throws {
         let attribution = try resolvePath(args: args)
         attribution.add(for: key, value: value)
     }
     
-    static func ==(lhs: Address, rhs: Address) -> Bool {
+    public static func ==(lhs: Address, rhs: Address) -> Bool {
         return lhs.key == rhs.key && lhs.path == rhs.path
     }
 }
 
 // dictionaries of typed property values
 public class Attribution : Equatable {
-    private var attributes = [String : Attribute<Any>]()
+    private var attributes = [String : Attributable]()
 
     public init() {
     }
@@ -276,13 +305,12 @@ public class Attribution : Equatable {
     }
 
     @discardableResult
-    public func add(for key: String, value: Any?) -> Attribution {
+    public func add(for key: String, value: Attributable?) -> Attribution {
         if (nil == value) {
             _ = self.remove(for: key)
         }
         else {
-            let attribute = Attribute(value!)
-            self.attributes[key] = attribute
+            self.attributes[key] = value!
         }
         return self         // allows chaining adds
     }
@@ -293,7 +321,7 @@ public class Attribution : Equatable {
         return self         // allows chaining removes
     }
 
-    public func get(for key: String) -> Attribute<Any>? {
+    public func get(for key: String) -> Attributable? {
         return attributes[key]
     }
     

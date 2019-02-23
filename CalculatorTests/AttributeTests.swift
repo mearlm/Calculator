@@ -18,65 +18,92 @@ class AttributeTests: XCTestCase {
     override func tearDown() {
         // Put teardown code here. This method is called after the invocation of each test method in the class.
     }
+    
+    private func equalAny<BaseType: Equatable>(lhv: Any, rhv: Any, baseType: BaseType.Type) -> Bool {
+        guard let lhsEquatable = lhv as? BaseType,
+            let rhsEquatable = rhv as? BaseType else {
+                return false
+        }
+        return lhsEquatable == rhsEquatable
+    }
 
     func testInt() {
-        let intAttr = Attribute(3)
-        let value = try! intAttr.asInt()
-        XCTAssert(value == 3)
-        XCTAssert(intAttr.rawValue() == 3)
-        XCTAssertThrowsError(try intAttr.asBool())
+        let testValue = 3
+        let attr = Attribute(testValue)
+        let value = try! attr.asInt()
+        XCTAssert(value == testValue)
+        XCTAssert(equalAny(lhv: testValue, rhv: attr.rawValue(), baseType: Int.self))
+        XCTAssertThrowsError(try attr.asString())
     }
     
     func testString() {
         let testValue = "test"
-        let strAttr = Attribute(testValue)
-        let value = try! strAttr.asString()
+        let attr = Attribute(testValue)
+        let value = try! attr.asString()
         XCTAssert(value == testValue)
-        XCTAssert(strAttr.rawValue() == testValue)
-        XCTAssertThrowsError(try strAttr.asInt())
+        XCTAssert(equalAny(lhv: testValue, rhv: attr.rawValue(), baseType: String.self))
+        XCTAssertThrowsError(try attr.asBool())
     }
     
     func testBool() {
         let testValue = true
-        let strAttr = Attribute(testValue)
-        let value = try! strAttr.asBool()
+        let attr = Attribute(testValue)
+        let value = try! attr.asBool()
         XCTAssert(value == testValue)
-        XCTAssert(strAttr.rawValue() == testValue)
-        XCTAssertThrowsError(try strAttr.asString())
+        XCTAssert(equalAny(lhv: testValue, rhv: attr.rawValue(), baseType: Bool.self))
+        XCTAssertThrowsError(try attr.asDice())
     }
 
     func testDice() {
         let testValue = Dice(count: 3, sides: 6)
-        let strAttr = Attribute(testValue)
-        let value = try! strAttr.asDice()
+        let attr = Attribute(testValue)
+        let value = try! attr.asDice()
         XCTAssert(value == testValue)
-        XCTAssert(strAttr.rawValue() == testValue)
-        XCTAssertThrowsError(try strAttr.asBool())
+        XCTAssert(equalAny(lhv: testValue, rhv: attr.rawValue(), baseType: Dice.self))
+        XCTAssertThrowsError(try attr.asInt())
     }
 
-//    func testAddress() {
-//        let testValue = Address("a.b.c")
-//        let strAttr = Attribute(testValue)
-//        let value = try! strAttr.asAddress()
-//        XCTAssert(value == testValue)
-//        XCTAssert(strAttr.rawValue() == testValue)
-//        XCTAssertThrowsError(try strAttr.asAttribution())
-//    }
-//
-//    func testAttribution() {
-//        let testValue = Attribution()
-//        testValue.add(for: "a", value: "x")
-//            .add(for: "b", value: 3)
-//            .add(for: "c", value: false)
-//
-//        let strAttr = Attribute(testValue)
-//        let value = try! strAttr.asAttribution()
-//        XCTAssert(value == testValue)
-//        XCTAssert(strAttr.rawValue() == testValue)
-//        XCTAssertThrowsError(try strAttr.asDistribution())
-//    }
+    func testAddress() {
+        let testValue = Address("a.b.c")
+        let attr = Attribute(testValue)
+        let value = try! attr.asAddress()
+        XCTAssert(value == testValue)
+        XCTAssert(equalAny(lhv: testValue, rhv: attr.rawValue(), baseType: Address.self))
+        XCTAssertThrowsError(try attr.asInt())
+    }
 
-    func testDistribution() {
+    func testAttribution() {
+        let testValue = Attribution()
+            .add(for: "a", value: Attribute("x"))
+            .add(for: "b", value: Attribute(3))
+            .add(for: "c", value: Attribute(false))
+
+        let attr = Attribute(testValue)
+        let value = try! attr.asAttribution()
+        XCTAssert(value == testValue)
+        XCTAssert(equalAny(lhv: testValue, rhv: attr.rawValue(), baseType: Attribution.self))
+        XCTAssertThrowsError(try attr.asDistribution(of: String.self))
+    }
+
+    func testDistributionOfStrings() {
+        let members = [
+            (weight: 10, value: "a"),
+            (weight: 15, value: "b"),
+            (weight: 30, value: "c"),
+            (weight: 55, value: "d"),
+            (weight: 75, value: "e"),
+            (weight: 100, value: "f")
+        ]
+        // [(weight: Int, value: Attribute<Any>)]
+        let testValue = try! Distribution(members: members)
+        let attr = Attribute(testValue)
+        let value = try! attr.asDistribution(of: String.self)
+        XCTAssert(value == testValue)
+        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Distribution<Attribute<String>>.self))
+        XCTAssertThrowsError(try attr.asAttribution())
+    }
+    
+    func testDistributionOfAttributes() {
         let members = [
             (weight: 10, value: Attribute("a")),
             (weight: 15, value: Attribute("b")),
@@ -86,12 +113,44 @@ class AttributeTests: XCTestCase {
             (weight: 100, value: Attribute("f"))
         ]
         // [(weight: Int, value: Attribute<Any>)]
-        let testValue = Distribution(members: members)
-        
-        let strAttr = Attribute(testValue)
-        let value = strAttr.rawValue()
+        let testValue = try! Distribution(members: members)
+        let attr = Attribute(testValue)
+        let value = try! attr.asDistribution(of: Attribute<String>.self)
         XCTAssert(value == testValue)
-        XCTAssertThrowsError(try strAttr.asInt())
+        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Distribution<Attribute<String>>.self))
+        XCTAssertThrowsError(try attr.asDice())
+    }
+
+    func testDistributionOfAttributions() {
+        let members = [
+            (weight: 10, value: Attribution().add(for: "key", value: Attribute("a"))),
+            (weight: 15, value: Attribution().add(for: "key", value: Attribute(0))),
+            (weight: 30, value: Attribution().add(for: "key", value: Attribute(true))),
+            (weight: 55, value: Attribution().add(for: "key", value: Attribute(Dice(count: 2, sides: 8)))),
+            (weight: 75, value: Attribution().add(for: "key", value: nil)),
+            (weight: 100, value: Attribution().add(for: "key", value: Attribute(Attribution().add(for: "name", value: Attribute("f")))))
+        ]
+        // [(weight: Int, value: Attribute<Any>)]
+        let testValue = try! Distribution(members: members)
+        let attr = Attribute(testValue)
+        let value = try! attr.asDistribution(of: Attribution.self)
+        XCTAssert(value == testValue)
+        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Distribution<Attribute<String>>.self))
+        XCTAssertThrowsError(try attr.asDice())
+    }
+    
+    func testContainer() {
+        let testValue = TestContainer(size: 5)
+        testValue.add(thing: TestContainee())
+        testValue.add(thing: TestContainee())
+        testValue.add(thing: TestContainee())
+        testValue.add(thing: TestContainee())
+        
+        let attr = Attribute(testValue)
+        let value = try! attr.asType(TestContainer.self)
+        XCTAssert(value == testValue)
+        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Distribution<Attribute<String>>.self))
+        XCTAssertThrowsError(try attr.asDice())
     }
 
 //    func testPerformanceExample() {
@@ -101,4 +160,67 @@ class AttributeTests: XCTestCase {
 //        }
 //    }
 
+}
+
+class TestContainer : Container {
+    typealias T = TestContainee
+    
+    init(size: Int) {
+        self.things = []
+        self.capacity = size
+    }
+    
+    var things: [T]
+    var capacity: Int
+    
+    @discardableResult
+    func add(thing: T) -> Bool {
+        guard (self.things.count < self.capacity) else {
+            return false
+        }
+        self.things.append(thing)
+        return true
+    }
+ 
+   @discardableResult
+   func remove(thing: T) -> Bool {
+        if let index = self.things.index(of: thing) {
+            self.things.remove(at: index)
+            return true
+        }
+        return false
+    }
+
+    static func == (lhs: TestContainer, rhs: TestContainer) -> Bool {
+        guard (lhs.things.count == rhs.things.count) else {
+            return false
+        }
+        for ix in lhs.things.indices {
+            if lhs.things[ix] != rhs.things[ix] {
+                return false
+            }
+        }
+        return true
+    }
+}
+
+class TestContainee : Attributed, Equatable {
+    static var nextId = 1
+    static func getNextId() -> Int {
+        let result = nextId
+        nextId += 1
+
+        return result
+    }
+    
+    var attributes: Attribution
+    
+    init() {
+        attributes = Attribution()
+            .add(for: "id", value: Attribute(TestContainee.getNextId()))
+    }
+    
+    static func == (lhs: TestContainee, rhs: TestContainee) -> Bool {
+        return lhs.attributes == rhs.attributes
+    }
 }

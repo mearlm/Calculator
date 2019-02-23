@@ -8,7 +8,7 @@
 
 import Foundation
 
-public protocol Container: Sequence {
+public protocol Container: Sequence, Equatable {
     associatedtype T : Attributed
     
     var things: [T] { get }

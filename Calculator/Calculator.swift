@@ -25,14 +25,14 @@ enum CalculationError: Error {
     case invalidCall(error: String)
 }
 
-public class Calculator<T: Equatable> {
+public class Calculator {
     // result: 0 to limit - 1
     public static func rand(_ limit: Int) -> Int {
         // ToDo: implement classic Rogue rand
         return Int(arc4random_uniform(UInt32(limit)))   // Swift 4.1 nonsense; ToDo: update to 4.2
     }
 
-    private var dataStack = [Attribute<T>]()
+    private var dataStack = [Attributable]()
 
     public func calculate(for expression: String, with args: Attribution) throws -> Bool {
         if let nodes = parse(expression) {
@@ -93,11 +93,11 @@ public class Calculator<T: Equatable> {
                     var value = try addr.fetch(args: args) as Int
 
                     if ("@" == node.op) {
-                        push(Attribute(value) as! Attribute<T>)     // replace address on stack with value
+                        push(Attribute(value))     // replace address on stack with value
                     }
                     else {
                         value += ("++" == node.op) ? 1 : -1         // increment, decrement
-                        try addr.store(value: value, args: args)    // update stored value
+                        try addr.store(value: Attribute(value), args: args)    // update stored value
                     }
                 case "+":
                     continue
@@ -132,7 +132,7 @@ public class Calculator<T: Equatable> {
                     }
                     
                     let value = try addr.fetch(args: args) as Int
-                    try addr.store(value: value + increment, args: args)
+                    try addr.store(value: Attribute(value + increment), args: args)
                 case "+":
                     try sum()
                 case "-":
@@ -217,31 +217,31 @@ public class Calculator<T: Equatable> {
     }
     
     // a Forth-like token processor
-    private func push(_ value: Attribute<T>) {
+    private func push(_ value: Attributable) {
         self.dataStack.append(value)
     }
     
     private func push(_ value: Int) {
-        self.push(Attribute(value) as! Attribute<T>)
+        self.push(Attribute(value))
     }
     
     private func push(_ value: Bool) {
-        self.push(Attribute(value) as! Attribute<T>)
+        self.push(Attribute(value))
     }
     
     private func push(_ value: String) {
-        self.push(Attribute(value) as! Attribute<T>)
+        self.push(Attribute(value))
     }
 
     private func push(_ value: Dice) {
-        self.push(Attribute(value) as! Attribute<T>)
+        self.push(Attribute(value))
     }
     
     private func push(_ value: Address) {
-        self.push(Attribute(value) as! Attribute<T>)
+        self.push(Attribute(value))
     }
 
-    private func pop() -> Attribute<T>? {
+    private func pop() -> Attributable? {
         if !self.dataStack.isEmpty {
             return self.dataStack.removeLast()
         }
