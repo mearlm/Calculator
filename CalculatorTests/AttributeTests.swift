@@ -205,19 +205,10 @@ class TestContainer : Container {
 }
 
 class TestContainee : Attributed, Equatable {
-    static var nextId = 1
-    static func getNextId() -> Int {
-        let result = nextId
-        nextId += 1
-
-        return result
-    }
-    
     var attributes: Attribution
     
     init() {
         attributes = Attribution()
-            .add(for: "id", value: Attribute(TestContainee.getNextId()))
     }
     
     static func == (lhs: TestContainee, rhs: TestContainee) -> Bool {

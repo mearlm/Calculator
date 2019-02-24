@@ -90,7 +90,9 @@ public class Calculator {
                         throw CalculationError.emptyStackError
                     }
                     // retrieve the value
-                    var value = try addr.fetch(args: args) as Int
+                    guard var value = try addr.fetch(args: args)?.asInt() else {
+                        throw AttributionError.missingAttribute(for: node.op)
+                    }
 
                     if ("@" == node.op) {
                         push(Attribute(value))     // replace address on stack with value
@@ -131,7 +133,9 @@ public class Calculator {
                         increment = -increment
                     }
                     
-                    let value = try addr.fetch(args: args) as Int
+                    guard let value = try addr.fetch(args: args)?.asInt() else {
+                        throw AttributionError.missingAttribute(for: node.op)
+                    }
                     try addr.store(value: Attribute(value + increment), args: args)
                 case "+":
                     try sum()
@@ -383,12 +387,12 @@ public class Calculator {
     }
     
     // select an index from a distribution
-//    private func select() throws {
-//        guard let value = pop()?.rawValue() as? Distribution else {
-//            throw CalculationError.emptyStackError
-//        }
-//        push(Attribute(value.select()))
-//    }
+    private func select() throws {
+        guard let value = try pop()?.asDistribution(of: Attribution.self) else {
+            throw CalculationError.emptyStackError
+        }
+        push(Attribute(value.select()))
+    }
     
     private func throwDice() throws{
         guard let value = try pop()?.asDice() else {
@@ -463,7 +467,9 @@ public class Calculator {
         guard let addr = try pop()?.asAddress() else {
             throw CalculationError.emptyStackError
         }
-        let elements = try addr.fetch(args: args) as AnySequence<Attributed>        // Container
+        guard let elements = try addr.fetch(args: args)?.asType(AnySequence<Attributed>.self) else {    // Container
+            throw AttributionError.invalidDereference(error: addr.asString())
+        }
 
         let it = elements.makeIterator()
         while let element = it.next() {

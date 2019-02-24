@@ -39,6 +39,8 @@ public protocol Attributable {
     func asDistribution<E: Equatable>(of: E.Type) throws -> Distribution<E>
     func asType<E>(_ type: E.Type) throws -> E
     func isEqual(other: Attributable) -> Bool
+    
+    func describe(resolve: Bool, within: Attribution) throws -> String
 }
 
 public struct Attribute<T> : Attributable {
@@ -116,6 +118,19 @@ public struct Attribute<T> : Attributable {
         return (value as! Distribution<E>)
     }
     
+    public func describe(resolve: Bool, within args: Attribution) throws -> String {
+        if (resolve && valueType == Address.self) {
+            guard let result = try self.asAddress().fetch(args: args) else {
+                return ""       // no such attribute in args
+            }
+            return try result.describe(resolve: resolve, within: args)
+        }
+        if (valueType == Dice.self) {
+            return try! self.asDice().asString()
+        }
+        return String(describing: value)
+    }
+    
 //    public func asAction() throws -> Action {
 //        if let error = validate(requested: Action.self) {
 //            throw error
@@ -171,137 +186,31 @@ extension Attribute: Equatable where T: Equatable {
 public struct Dice : Equatable {
     public let count: Int
     public let sides: Int
-}
 
-// NB: in a given distribution, all values are the same type (T), e.g. String
-public typealias Membership<T> = [(weight: Int, value: T)]
-
-// weights: an ascending sequence of Ints greater than (or equal to) 1, and ending at 100
-// describing the probability of selecting the associated value
-public struct Distribution<T: Equatable>: Equatable {
-    private var members = Membership<T>()
-    private var last: (weight: Int, value: T) {
-        get { return members.last! }
-    }
-    
-    public init(members: Membership<T>) throws {
-        guard validate(members) else {
-            throw AttributionError.invalidDistribution(error: "invalid membership")
-        }
-        self.members = members
-    }
-
-    private func logError(error: String) {
-        // ToDo: add a proper error logging service
-        print(error)
-    }
-
-    private func validate(_ members: Membership<T>) -> Bool {
-        var weight = 0
-        for member in members {
-            if member.weight <= weight {
-                logError(error: "Distribution not ascending after \(weight).")
-                return false
-            }
-            weight = member.weight
-        }
-        if (100 != weight) {
-            logError(error: "Distribution unterminated at \(weight).")
-            return false
-        }
-        return true
-    }
-    
-    public func select() -> T {
-        let selector = Calculator.rand(self.last.weight)     // e.g. 0 - 99
-        for member in self.members {
-            if (member.weight >= selector) {
-                return member.value
-            }
-        }
-        return self.last.value                              // should never happen
-    }
-    
-    public static func ==(lhs: Distribution, rhs: Distribution) -> Bool {
-        guard lhs.members.count == rhs.members.count else {
-            return false
-        }
-        
-        for ix in lhs.members.indices {
-            if lhs.members[ix] != rhs.members[ix] {
-                return false
-            }
-        }
-        return true
-    }
-}
-
-public class Address : Equatable {
-    private let key: String
-    private let path: [String]
-    
-    init(_ address: String) {
-        var parts = address.split(separator: ".")
-        self.key = String(parts.removeLast())
-        self.path = parts.map{String($0)}
-    }
-    
-    private func resolvePath(args: Attribution) throws -> Attribution {
-        var attribution = args
-        
-        for part in self.path {
-            guard let next = attribution.get(for: part) else {
-                let message = "Attribution \(self.path.joined()) at \(part)"
-                throw AttributionError.missingAttribute(for: message)
-            }
-            attribution = try next.asAttribution()
-        }
-        return attribution
-    }
-    
-    func exists(args: Attribution) throws -> Bool {
-        let attribution = try resolvePath(args: args)
-        return attribution.containsKey(for: self.key)
-    }
-    
-    func fetch(args: Attribution) throws -> Any {
-        let attribution = try resolvePath(args: args)
-        guard let result = attribution.get(for: self.key) else {
-            let message = "Attribute \(self.path.joined()).\(self.key)"
-            throw AttributionError.missingAttribute(for: message)
-        }
-        
-        return result.rawValue()
-    }
-    
-    func fetch<T>(args: Attribution) throws -> T {
-        let value = try self.fetch(args: args)
-        if let result = value as? T {
-            return result
-        }
-        throw AttributionError.invalidFetch(expected: String(describing: T.self), received: String(describing: type(of: value)))
-    }
-    
-    // NB: store a nil value => delete key from Attribution
-    func store(value: Attributable?, args: Attribution) throws {
-        let attribution = try resolvePath(args: args)
-        attribution.add(for: key, value: value)
-    }
-    
-    public static func ==(lhs: Address, rhs: Address) -> Bool {
-        return lhs.key == rhs.key && lhs.path == rhs.path
+    public func asString() -> String {
+        return String(count) + "d" + String(sides)
     }
 }
 
 // dictionaries of typed property values
 public class Attribution : Equatable {
+    private static var nextId = 1
+    private static func getNextId() -> Int {
+        let result = nextId
+        nextId += 1
+        
+        return result
+    }
+    
     private var attributes = [String : Attributable]()
 
     public init() {
+        self.add(for: "id", value: Attribute(Attribution.getNextId()))
     }
 
-    public init(from collection: Attribution) {
-        self.attributes = collection.attributes     // copy on write
+    public init(from original: Attribution) {
+        self.attributes = original.attributes     // copy on write?
+        self.attributes["id"] = Attribute(Attribution.getNextId())
     }
 
     @discardableResult
