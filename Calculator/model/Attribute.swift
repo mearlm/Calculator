@@ -110,7 +110,7 @@ public struct Attribute<T> : Attributable {
         }
         return (value as! Attribution)
     }
-    
+
     public func asDistribution<E: Equatable>(of: E.Type) throws -> Distribution<E> {
         if let error = validate(requested: Distribution<E>.self) {
             throw error

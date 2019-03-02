@@ -86,21 +86,31 @@ public class Calculator {
 
                 switch node.op {
                 case "@", "++", "--":
+                    // read address from top-of-stack
                     guard let addr = try pop()?.asAddress() else {
                         throw CalculationError.emptyStackError
                     }
-                    // retrieve the value
-                    guard var value = try addr.fetch(args: args)?.asInt() else {
+                    
+                    // retrieve the value stored in the address
+                    guard let value = try addr.fetch(args: args) else {
                         throw AttributionError.missingAttribute(for: node.op)
                     }
 
+                    // replace address on stack with value retrieved
+                    push(Attribute(value))
+                    
                     if ("@" == node.op) {
-                        push(Attribute(value))     // replace address on stack with value
+                        break               // done
+                    }
+
+                    push(Attribute(1))
+                    if ("++" == node.op) {
+                        try sum()
                     }
                     else {
-                        value += ("++" == node.op) ? 1 : -1         // increment, decrement
-                        try addr.store(value: Attribute(value), args: args)    // update stored value
+                        try difference()
                     }
+                    try addr.store(value: pop(), args: args)
                 case "+":
                     continue
                 case "-":
