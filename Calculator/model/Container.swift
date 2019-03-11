@@ -8,28 +8,81 @@
 
 import Foundation
 
-public protocol Container: Sequence, Equatable {
-    associatedtype T : Attributed
-    
-    var things: [T] { get }
-    var capacity: Int { get }
+//public protocol Container: AnyObject {
+//    associatedtype T : Attributed
+//
+//    var things: [T] { get set }
+//    var capacity: Int { get }
+//
+//    func add(thing: T) -> Bool          // @discardableResult
+//    func remove(thing: T) -> Bool       // @discardableResult
+//
+//    func shuffle() throws -> [T]
+//    func sort(by keys: String...) throws -> [T]
+//    func find(matching: (key: String, value: Attributable)...) -> [T]
+//}
 
-    func add(thing: T) -> Bool
-    func remove(thing: T) -> Bool
-    
-    func shuffle() throws -> [T]
-    func sort(by keys: String...) throws -> [T]
-    func find(matching: (key: String, value: Attributable)...) -> [T]
-    
-    //func makeIterator() -> Array<Attributed>.Iterator
-}
-extension Container {
+open class Container<T: Attributed & Equatable>: Attribution, Collection {
+    internal static var THING : String {
+        get { return "[things]" }     // address key => member of a collection
+    }
     public static var UNLIMITED : Int {
-        get {
-            return -1
-        }
+        get { return -1 }
+    }
+
+    public var things: [T]
+    public var capacity: Int
+    
+    public init(size: Int) {
+        self.things = []
+        self.capacity = size
+        
+        super.init()
+    }
+
+    public convenience init(things: [T]) {
+        self.init(size: things.count)
+        self.things = things
     }
     
+    public convenience init?(things: [T], size: Int) {
+        guard size >= things.count else {
+            return nil
+        }
+        self.init(size: size)
+        self.things = things
+    }
+    
+    @discardableResult
+    public func add(thing: T) -> Bool {
+        guard capacity == Container.UNLIMITED || things.count < capacity else {
+            return false
+        }
+        things.append(thing)
+        return true
+    }
+    
+    @discardableResult
+    public func remove(thing: T) -> Bool {
+        if let index = things.index(of: thing) {
+            things.remove(at: index)
+            return true
+        }
+        return false
+    }
+    
+    override
+    public func findChildKey(for childId: Int) -> String? {
+        // look in the things collection to see if the child is present
+        let found = self.things.filter {
+            if let value = $0 as? Addressable {
+                return childId == value.getUniqueId()
+            }
+            return false
+        }
+        return (!found.isEmpty) ? Container.THING : nil
+    }
+
     // NB: the original container is not changed
     public func shuffle() -> [T] {
         var shuffled: [T] = []
@@ -60,12 +113,12 @@ extension Container {
         return sorted
     }
     
-    public func find(matching: (key: String, value: Attributable)...) -> [T] {
+    public func find(matching: (key: String, value: Any)...) -> [T] {
         var found = things
         for identifier in matching {
             found = found.filter {
                 if let value = $0.attributes.get(for: identifier.key) {
-                    return identifier.value.isEqual(other: value)
+                    return Attribute(identifier.value).isEqual(other: value)
                 }
                 return false
             }
@@ -73,7 +126,55 @@ extension Container {
         return found
     }
     
-    public func makeIterator() -> IndexingIterator<[Self.T]> {
-        return things.makeIterator()
+    override
+    internal func isEqual(other: Attribution) -> Bool {
+        guard let rhs = other as? Container<T>,
+            self.things.count == rhs.things.count else {
+            return false
+        }
+        
+        var ix = self.things.count - 1
+        while (0 < ix) {
+            if self.things[ix] != rhs.things[ix] {
+                return false
+            }
+            ix -= 1
+        }
+        return true
+    }
+
+    // conformance to Collection
+    public var startIndex: Int {
+        return things.startIndex
+        
+    }
+    
+    public var endIndex: Int {
+        return things.endIndex
+    }
+    
+    public func index(after index: Int) -> Int {
+        return things.index(after: index)
+    }
+    
+    public subscript(position: Int) -> T {
+        return things[position]
     }
 }
+
+// type erasure?
+// c.f. https://appventure.me/2017/12/10/patterns-for-working-with-associated-types/
+//open class AnyContainer<T: Attributed & Equatable>: Container<T> {
+//    private let _decode: (_ data: Data) -> T?
+//    private let _encode: () -> Data?
+//    init<U: Cachable>(_ cachable: U) where U.CacheType == T {
+//        _decode = cachable.decode
+//        _encode = cachable.encode
+//    }
+//    func decode(_ data: Data) -> T? {
+//        return _decode(data)
+//    }
+//    func encode() -> Data? {
+//        return _encode()
+//    }
+//}

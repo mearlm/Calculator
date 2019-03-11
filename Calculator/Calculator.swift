@@ -26,10 +26,16 @@ enum CalculationError: Error {
 }
 
 public class Calculator {
+    public static let TheCalculator = Calculator()      // default calculator
+    private static let rogueRand = RogueRand()
+    public static var useRogueRand = false
+    
     // result: 0 to limit - 1
     public static func rand(_ limit: Int) -> Int {
-        // ToDo: implement classic Rogue rand
-        return Int(arc4random_uniform(UInt32(limit)))   // Swift 4.1 nonsense; ToDo: update to 4.2
+        if useRogueRand {
+            return rogueRand.rnd(range: limit)
+        }
+        return Int.random(in: 0..<limit)
     }
 
     private var dataStack = [Attributable]()
@@ -77,7 +83,10 @@ public class Calculator {
                 push(bool.value)
             case is VariableNode:
                 let addr = node as! VariableNode
-                push(Address(addr.name))
+                if let addrNode = Address(addr.name) {
+                    push(addrNode)
+                }
+                // ToDo: else... what?
             case is UnaryOpNode:
                 let node = node as! UnaryOpNode
 
@@ -485,5 +494,40 @@ public class Calculator {
         while let element = it.next() {
             try evaluate(nodes: node.expression, args: element.attributes)
         }
+    }
+}
+
+private class RogueRand {
+    private var seed: UInt32
+    private let magic1: UInt32 = 11109
+    private let magic2: UInt32 = 12849
+    
+    init() {
+        let lowtime = Int32(time(nil));
+        
+        //#ifdef MASTER
+        //    if (wizard && getenv("SEED") != NULL)
+        var dnum: Int32
+        if let val = getenv("SEED") {
+            dnum = atoi(val);
+        }
+        else {
+            dnum = lowtime + SYS_getpid;
+        }
+        
+        seed = UInt32(dnum);
+        srandom(seed);
+    }
+    
+    private func RN() -> UInt32 {
+        var result = seed.multipliedReportingOverflow(by: magic1)
+        result = result.partialValue.addingReportingOverflow(magic2)
+        seed = result.partialValue
+        
+        return (seed >> 16) & 0xffff
+    }
+    
+    public func rnd(range: Int) -> Int {
+        return range == 0 ? 0 : abs(Int(RN())) % range;
     }
 }

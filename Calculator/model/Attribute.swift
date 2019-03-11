@@ -8,11 +8,36 @@
 
 import Foundation
 
-public enum AttributionError : Error {
+public enum AttributionError : LocalizedError {
     case missingAttribute(for: String)                      // no such attribute in Attribution
     case invalidDereference(error: String)                  // attribute dereference returned wrong type
     case invalidDistribution(error: String)                 // distribution failed to select
     case invalidFetch(expected: String, received: String)   // address returned unexpected type
+    case containerFull(max: Int)                            // adding when container is full
+    case runtimeError(error: String)                        // generic error
+    
+    public var errorDescription: String? {
+        switch self {
+        case let .missingAttribute(name):
+            return "missing attribute: \(name)"
+        case let .invalidFetch(expected, received):
+            return "expected: \(expected) received: \(received)"
+        case let .invalidDereference(error),
+             let .invalidDistribution(error),
+             let .runtimeError(error):
+            return "invalid: \(error)"
+        case let .containerFull(count):
+            return "container full (max=\(count))"
+        }
+    }
+    
+// alternate style with parameters
+//    var errorDescription: String {
+//        switch self {
+//        case .responseStatusError(status: let status, message: let message):
+//            return "Error with status \(status) and message \(message) was thrown"
+//        }
+//    }
 }
 
 // attribute collections:
@@ -26,8 +51,6 @@ public enum AttributionError : Error {
 //    attributes + Prototype, derivedFrom -> attributes/invarients
 // Event -> attributes
 
-//typealias Dice = (count: Int, sides: Int)
-
 public protocol Attributable {
     func rawValue() -> Any
     func asInt() throws -> Int
@@ -37,106 +60,95 @@ public protocol Attributable {
     func asAddress() throws -> Address
     func asAttribution() throws -> Attribution
     func asDistribution<E: Equatable>(of: E.Type) throws -> Distribution<E>
+    func asContainer<E: Equatable>(of ctype: E.Type) throws -> Container<E> 
     func asType<E>(_ type: E.Type) throws -> E
     func isEqual(other: Attributable) -> Bool
     
-    func describe(resolve: Bool, within: Attribution) throws -> String
+    func describe(resolve: Bool, within: Attribution?) throws -> String
 }
 
 public struct Attribute<T> : Attributable {
-    let valueType: Any.Type
     let value: T
     
     public init(_ value: T) {
         self.value = value
-        self.valueType = type(of: value as Any)
     }
-
-    private func validate(requested: Any.Type) -> Error? {
-        return (self.valueType == requested)
-            ? nil
-            : AttributionError.invalidDereference(error: "For \(self.valueType), requested: \(requested).")
+    
+    private func tryCast<R>(as rtype: R.Type) throws -> R {
+        if let result = value as? R {
+            return result
+        }
+        throw AttributionError.invalidDereference(error: "For \(type(of: value as Any)), requested: Container<\(type(of: rtype as Any))>")
     }
     
     public func rawValue() -> Any {
         return value
     }
     
+    // for attribute types not specified explicitly:
     public func asType<E>(_ type: E.Type) throws -> E {
-        if let error = validate(requested: type) {
-            throw error
-        }
-        return (value as! E)
+        return try tryCast(as: E.self)
     }
     
     public func asInt() throws -> Int {
-        if let error = validate(requested: Int.self) {
-            throw error
-        }
-        return (value as! Int)
+        return try tryCast(as: Int.self)
     }
     
     public func asString() throws -> String {
-        if let error = validate(requested: String.self) {
-            throw error
-        }
-        return (value as! String)
+        return try tryCast(as: String.self)
     }
     
     public func asBool() throws -> Bool {
-        if let error = validate(requested: Bool.self) {
-            throw error
-        }
-        return (value as! Bool)
+        return try tryCast(as: Bool.self)
     }
     
     public func asDice() throws -> Dice {
-        if let error = validate(requested: Dice.self) {
-            throw error
-        }
-        return (value as! Dice)
+        return try tryCast(as: Dice.self)
     }
     
     public func asAddress() throws -> Address {
-        if let error = validate(requested: Address.self) {
-            throw error
-        }
-        return (value as! Address)
+        return try tryCast(as: Address.self)
     }
 
     public func asAttribution() throws -> Attribution {
-        if let error = validate(requested: Attribution.self) {
-            throw error
-        }
-        return (value as! Attribution)
+        return try tryCast(as: Attribution.self)
     }
 
     public func asDistribution<E: Equatable>(of: E.Type) throws -> Distribution<E> {
-        if let error = validate(requested: Distribution<E>.self) {
-            throw error
-        }
-        return (value as! Distribution<E>)
+        return try tryCast(as: Distribution<E>.self)
+    }
+
+    public func asContainer<E: Equatable>(of ctype: E.Type) throws -> Container<E> {
+        return try tryCast(as: Container<E>.self)
     }
     
-    public func describe(resolve: Bool, within args: Attribution) throws -> String {
-        if (resolve && valueType == Address.self) {
-            guard let result = try self.asAddress().fetch(args: args) else {
-                return ""       // no such attribute in args
+//    public func asAction() throws -> Action {
+//        return try tryCast(as: Action.self)
+//    }
+    
+    public func describe() throws -> String {
+        return try describe(resolve: false, within: nil)
+    }
+
+    public func describe(resolve: Bool, within args: Attribution?) throws -> String {
+        let valueType = type(of: value as Any)
+        if valueType == Address.self {
+            if resolve, let args = args {
+                guard let result = try self.asAddress().fetch(args: args) else {
+                    return ""       // no such attribute in args
+                }
+                return try result.describe(resolve: resolve, within: args)
             }
-            return try result.describe(resolve: resolve, within: args)
+            else {
+                let result = try self.asAddress()
+                return result.asString()
+            }
         }
         if (valueType == Dice.self) {
             return try! self.asDice().asString()
         }
         return String(describing: value)
     }
-    
-//    public func asAction() throws -> Action {
-//        if let error = validate(requested: Action.self) {
-//            throw error
-//        }
-//        return (value as! Action)
-//    }
     
     private static func equalAny<BaseType: Equatable>(lhv: Any, rhv: Any, baseType: BaseType.Type) -> Bool {
         guard let lhsEquatable = lhv as? BaseType,
@@ -147,28 +159,29 @@ public struct Attribute<T> : Attributable {
     }
     
     public func isEqual(other: Attributable) -> Bool {
+        let baseType = type(of: value as Any)           // actual type of (generic object) value
         let otherValue = other.rawValue()
-        
-        guard valueType == type(of: otherValue as Any) else {
+
+        guard baseType == type(of: otherValue as Any) else {
             return false
         }
-        
-        if (self.valueType == Int.self) {
+
+        if (baseType == Int.self) {
             return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Int.self)
         }
-        else if (self.valueType == String.self) {
+        else if (baseType == String.self) {
             return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: String.self)
         }
-        else if (self.valueType == Bool.self) {
+        else if (baseType == Bool.self) {
             return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Bool.self)
         }
-        else if (self.valueType == Dice.self) {
+        else if (baseType == Dice.self) {
             return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Dice.self)
         }
-        else if (self.valueType == Address.self) {
+        else if (baseType == Address.self) {
             return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Address.self)
         }
-        else if (self.valueType == Attribution.self) {
+        else if (baseType == Attribution.self) {
             return Attribute.equalAny(lhv: self.value, rhv: otherValue, baseType: Attribution.self)
         }
         else {      // NB: can't compare generic Distribution-type attributes
@@ -191,84 +204,3 @@ public struct Dice : Equatable {
         return String(count) + "d" + String(sides)
     }
 }
-
-// dictionaries of typed property values
-public class Attribution : Equatable {
-    private static var nextId = 1
-    private static func getNextId() -> Int {
-        let result = nextId
-        nextId += 1
-        
-        return result
-    }
-    
-    private var attributes = [String : Attributable]()
-
-    public init() {
-        self.add(for: "id", value: Attribute(Attribution.getNextId()))
-    }
-
-    public init(from original: Attribution) {
-        self.attributes = original.attributes     // copy on write?
-        self.attributes["id"] = Attribute(Attribution.getNextId())
-    }
-
-    @discardableResult
-    public func add(for key: String, value: Attributable?) -> Attribution {
-        if (nil == value) {
-            _ = self.remove(for: key)
-        }
-        else {
-            self.attributes[key] = value!
-        }
-        return self         // allows chaining adds
-    }
-
-    @discardableResult
-    public func remove(for key: String) -> Attribution {
-        self.attributes.removeValue(forKey: key)
-        return self         // allows chaining removes
-    }
-
-    public func get(for key: String) -> Attributable? {
-        return attributes[key]
-    }
-    
-    public func containsKey(for key: String) -> Bool {
-        return self.attributes.keys.contains(key)
-    }
-    
-    public func keys() -> [String] {
-        return Array(self.attributes.keys)
-    }
-    
-    public func count() -> Int {
-        return attributes.count
-    }
-
-    public static func ==(lhs: Attribution, rhs: Attribution) -> Bool {
-        if lhs === rhs {
-            return true         // identical object instances
-        }
-        guard lhs.count() == rhs.count() else {
-            return false
-        }
-
-        for (key, value) in lhs.attributes {
-            guard !rhs.containsKey(for: key) else {
-                return false
-            }
-            let rhval = rhs.get(for: key)!
-            
-            guard (value.isEqual(other: rhval)) else {
-                return false
-            }
-        }
-        return true
-    }
-}
-
-public protocol Attributed {
-    var attributes: Attribution { get }
-}
-

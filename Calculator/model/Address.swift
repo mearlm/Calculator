@@ -8,12 +8,52 @@
 
 import Foundation
 
+// container Attribute types [Distribution, Container and Attribution (map)] are all Addressable
+// other primitive Attribute types are not
+// so not all children are Addressable, but all parents must be
+public protocol Addressable {
+    var _parent: Addressable? { get }               // the root object(s) have no parent
+    var _id: Int { get }
+    func getAddress() -> Address?
+    func getUniqueId() -> Int
+    func findChildKey(for childId: Int) -> String?
+}
+extension Addressable {
+    public func getUniqueId() -> Int {
+        return self._id
+    }
+    
+    public func getAddress() -> Address? {
+        guard let ancestor = self._parent else {
+            return nil
+        }
+        
+        if let key = ancestor.findChildKey(for: self._id) {
+            if let path = ancestor.getAddress() {
+                return Address([key, path.asString()].joined(separator: "."))
+            }
+            return Address(key)
+        }
+        return nil
+    }
+}
+
 public class Address : Equatable {
+    private static let SEP_CHAR = "."
+    
+    public static func composeKey(path: [String], key: String) -> String {
+        let keys = path + [key]
+        return keys.joined(separator: Address.SEP_CHAR)
+    }
+    
     private let key: String
     private let path: [String]
     
-    init(_ address: String) {
-        var parts = address.split(separator: ".")
+    init?(_ address: String) {
+        var parts = address.split(separator: Character(Address.SEP_CHAR))
+        if 0 == parts.count {
+            return nil
+        }
         self.key = String(parts.removeLast())
         self.path = parts.map{String($0)}
     }
@@ -23,7 +63,7 @@ public class Address : Equatable {
         
         for part in self.path {
             guard let next = attribution.get(for: part) else {
-                let message = "Attribution \(self.path.joined()) at \(part)"
+                let message = "address \(self.asString()) at \(part)"
                 throw AttributionError.missingAttribute(for: message)
             }
             attribution = try next.asAttribution()
@@ -32,8 +72,10 @@ public class Address : Equatable {
     }
     
     func exists(args: Attribution) throws -> Bool {
-        let attribution = try resolvePath(args: args)
-        return attribution.containsKey(for: self.key)
+        if let attribution = try? resolvePath(args: args) {
+            return attribution.containsKey(for: self.key)
+        }
+        return false
     }
     
     func fetch(args: Attribution) throws -> Attributable? {
@@ -41,13 +83,13 @@ public class Address : Equatable {
         return attribution.get(for: self.key)
     }
 
-    //    func fetch<T>(args: Attribution) throws -> T {
-    //        let value = try self.fetch(args: args)
-    //        if let result = value as? T {
-    //            return result
-    //        }
-    //        throw AttributionError.invalidFetch(expected: String(describing: T.self), received: String(describing: type(of: value)))
-    //    }
+//    func fetch<T>(args: Attribution) throws -> T {
+//        let value = try self.fetch(args: args)
+//        if let result = value as? T {
+//            return result
+//        }
+//        throw AttributionError.invalidFetch(expected: String(describing: T.self), received: String(describing: type(of: value)))
+//    }
     
     // NB: store a nil value => delete key from Attribution
     func store(value: Attributable?, args: Attribution) throws {
@@ -55,11 +97,14 @@ public class Address : Equatable {
         attribution.add(for: key, value: value)
     }
     
+    // NB: can't distinguish value-types for attribution.add at compile time
+    func store<T>(value: T?, args: Attribution) throws {
+        let attribution = try resolvePath(args: args)
+        attribution.add(for: key, value: value)
+    }
+    
     func asString() -> String {
-        var parts = self.path
-        parts.append(key)
-        
-        return parts.joined(separator: ".")
+        return Address.composeKey(path: self.path, key: self.key)
     }
     
     public static func ==(lhs: Address, rhs: Address) -> Bool {

@@ -21,6 +21,81 @@ class CalculatorTests: XCTestCase {
         super.tearDown()
     }
     
+    private func testRand(maxcount: Int) {
+        let limit = 100
+        var maxval: (val: Int, at: Int) = (0, 0)
+        var minval: (val: Int, at: Int) = (limit, 0)
+        var allval = Array(repeating: 0, count: limit)
+        
+        var count = maxcount
+        
+        while (0 < count) {
+            let rndval = Calculator.rand(limit)
+            allval[rndval] += 1
+
+            if (maxval.val < rndval) {
+//                print("new maxval: \(rndval) was: \(maxval) at: \(count)")
+                maxval = (rndval, count)
+            }
+            if (minval.val > rndval) {
+//                print("new minval: \(rndval) was: \(minval) at: \(count)")
+                minval = (rndval, count)
+            }
+            
+            count -= 1
+        }
+        XCTAssert(maxval.val >= 0 && maxval.val < limit)
+        XCTAssert(minval.val >= 0 && minval.val < limit)
+        
+        var maxAt: (count: Int, at: Int?) = (0, nil)
+        var minAt: (count: Int, at: Int?) = (maxcount, nil)
+        var missing: [Int] = []
+        var distribution: [Int] = []
+        
+        for ix in 0..<limit {
+            // print("@\(ix): \(allval[ix])")
+            if 0 == allval[ix] {
+                missing.append(ix)
+            }
+            else {
+                if (maxAt.count < allval[ix]) {
+                    maxAt = (allval[ix], ix)
+                }
+                if (minAt.count > allval[ix]) {
+                    minAt = (allval[ix], ix)
+                }
+            }
+            
+            if (allval[ix] >= distribution.count) {
+                // resize
+                var d2 = Array(repeating: 0, count: allval[ix] + 1)
+                for xi in 0..<distribution.count {
+                    d2[xi] = distribution[xi]
+                }
+                distribution = d2
+            }
+            distribution[allval[ix]] += 1
+        }
+        
+        // display stats
+        print("max value: \(maxval) of \(maxcount)")
+        print("min value: \(minval) of \(maxcount)")
+        print("missing \(missing.count): \(missing) for isRogueRand: \(Calculator.useRogueRand)")
+        print("max count: \(maxAt)")
+        print("min count: \(minAt)")
+        print("distribution: \(distribution)")
+    }
+    
+    func testNewRand() {
+        Calculator.useRogueRand = false
+        testRand(maxcount: 400)
+    }
+    
+    func testRogueRand() {
+        Calculator.useRogueRand = true
+        testRand(maxcount: 400)
+    }
+
 //    private func forEachExpressionParserTest(expression: String, count: Int) {
 //        let calc = Calculator()
 //        if let nodes = calc.parse(expression) {

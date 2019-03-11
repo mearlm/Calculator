@@ -61,6 +61,9 @@ class AttributeTests: XCTestCase {
         XCTAssert(value == testValue)
         XCTAssert(equalAny(lhv: testValue, rhv: attr.rawValue(), baseType: Dice.self))
         XCTAssertThrowsError(try attr.asInt())
+        
+        let label = try! attr.describe(resolve: false, within: nil)
+        XCTAssert("3d6" == label)
     }
 
     func testAddress() {
@@ -68,7 +71,7 @@ class AttributeTests: XCTestCase {
         let attr = Attribute(testValue)
         let value = try! attr.asAddress()
         XCTAssert(value == testValue)
-        XCTAssert(equalAny(lhv: testValue, rhv: attr.rawValue(), baseType: Address.self))
+        XCTAssert(equalAny(lhv: testValue!, rhv: attr.rawValue(), baseType: Address.self))
         XCTAssertThrowsError(try attr.asInt())
     }
 
@@ -84,6 +87,40 @@ class AttributeTests: XCTestCase {
         XCTAssert(equalAny(lhv: testValue, rhv: attr.rawValue(), baseType: Attribution.self))
         XCTAssertThrowsError(try attr.asDistribution(of: String.self))
     }
+    
+    func testAttributionValue() {
+        let testValue = Attribution()
+        
+        testValue.add(for: "xxx", value: Attribute(3))      // wrapped
+        testValue.add(for: "yyy", value: 3)                 // raw
+        
+        if let xxx = testValue.get(for: "xxx"),
+            let yyy = testValue.get(for: "yyy") {
+            XCTAssert(xxx.isEqual(other: yyy))
+        }
+        else {
+            XCTFail()
+        }
+    }
+    
+    func testAttributionRemove() {
+        let testValue = Attribution()
+            .add(for: "a", value: Attribute("x"))
+            .add(for: "b", value: Attribute(3))
+            .add(for: "c", value: Attribute(false))
+        
+        XCTAssert(testValue.containsKey(for: "a"))
+        XCTAssert(3 == testValue.count())
+        
+        testValue.add(for: "a", value: nil)             // remove by add (nil)
+        XCTAssert(!testValue.containsKey(for: "a"))
+        XCTAssert(2 == testValue.count())
+        
+        XCTAssert(testValue.containsKey(for: "c"))
+        testValue.remove(for: "c")                      // remove by remove
+        XCTAssert(!testValue.containsKey(for: "c"))
+        XCTAssert(1 == testValue.count())
+    }
 
     func testDistributionOfStrings() {
         let members = [
@@ -97,7 +134,7 @@ class AttributeTests: XCTestCase {
         // [(weight: Int, value: Attribute<Any>)]
         let testValue = try! Distribution(members: members)
         let attr = Attribute(testValue)
-        let value = try! attr.asDistribution(of: String.self)
+        let value = try! attr.asDistribution(of: String.self)                   // content type
         XCTAssert(value == testValue)
         XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Distribution<Attribute<String>>.self))
         XCTAssertThrowsError(try attr.asAttribution())
@@ -115,10 +152,13 @@ class AttributeTests: XCTestCase {
         // [(weight: Int, value: Attribute<Any>)]
         let testValue = try! Distribution(members: members)
         let attr = Attribute(testValue)
-        let value = try! attr.asDistribution(of: Attribute<String>.self)
+        let value = try! attr.asDistribution(of: Attribute<String>.self)        // content type
         XCTAssert(value == testValue)
         XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Distribution<Attribute<String>>.self))
         XCTAssertThrowsError(try attr.asDice())
+        
+        let other = try! attr.asType(Distribution<Attribute<String>>.self)      // distribution incl. content type
+        XCTAssert(other == testValue)
     }
 
     func testDistributionOfAttributions() {
@@ -133,24 +173,90 @@ class AttributeTests: XCTestCase {
         // [(weight: Int, value: Attribute<Any>)]
         let testValue = try! Distribution(members: members)
         let attr = Attribute(testValue)
-        let value = try! attr.asDistribution(of: Attribution.self)
+        let value = try! attr.asDistribution(of: Attribution.self)              // content type
         XCTAssert(value == testValue)
         XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Distribution<Attribute<String>>.self))
         XCTAssertThrowsError(try attr.asDice())
     }
     
-    func testContainer() {
+    func testContainerAsType() {
         let testValue = TestContainer(size: 5)
-        testValue.add(thing: TestContainee())
-        testValue.add(thing: TestContainee())
-        testValue.add(thing: TestContainee())
-        testValue.add(thing: TestContainee())
+        testValue.add(thing: TestContainee(with: Attribution()))
+        testValue.add(thing: TestContainee(with: Attribution()))
+        testValue.add(thing: TestContainee(with: Attribution()))
+        testValue.add(thing: TestContainee(with: Attribution()))
         
         let attr = Attribute(testValue)
         let value = try! attr.asType(TestContainer.self)
         XCTAssert(value == testValue)
         XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Distribution<Attribute<String>>.self))
         XCTAssertThrowsError(try attr.asDice())
+    }
+    
+    func testContainerAsContainer() {
+        let testValue = TestContainer(size: 5)
+        testValue.add(thing: TestContainee(with: Attribution()))
+        testValue.add(thing: TestContainee(with: Attribution()))
+        testValue.add(thing: TestContainee(with: Attribution()))
+        testValue.add(thing: TestContainee(with: Attribution()))
+        
+        let attr = Attribute(testValue)
+        let value = try! attr.asContainer(of: TestContainee.self)
+        XCTAssert(value == testValue)
+        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Container<Containee>.self))
+        do {
+            _ = try attr.asContainer(of: TestContaineeSubType.self)
+            throw AttributionError.runtimeError(error: "exception expected")
+        } catch AttributionError.invalidDereference(let message) {
+            print(AttributionError.invalidDereference(error: message).errorDescription!)
+        } catch {
+            print(error)
+            XCTFail()
+        }
+    }
+    
+    // NB: cannot retrieve container of subtype objects!
+    func testContainerAsSubTypeContainer() {
+        let testValue = TestContainer(size: 5)
+        testValue.add(thing: TestContaineeSubType(with: Attribution()))
+        testValue.add(thing: TestContaineeSubType(with: Attribution()))
+        testValue.add(thing: TestContaineeSubType(with: Attribution()))
+        testValue.add(thing: TestContaineeSubType(with: Attribution()))
+        
+        let attr = Attribute(testValue)
+        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue))) // Container<TestContainee>.self))
+        let value = try! attr.asContainer(of: TestContainee.self)                   // content type
+        XCTAssert(value == testValue)
+        let other = try! attr.asType(TestContainer.self)                            // container type
+        XCTAssert(other == testValue)
+        let third = try! attr.asType(Container<TestContainee>.self)                 // container incl. content type
+        XCTAssert(third == testValue)
+
+        // things that don't work :( [NB: TestContainer is declared as Container<TestContainee>]
+        XCTAssertThrowsError(try attr.asContainer(of: TestContaineeSubType.self))   // content type FAILS!
+        XCTAssertThrowsError(try attr.asType(Container<TestContaineeSubType>.self)) // container incl. content type FAILS!
+        
+        // comparisons that do work
+        XCTAssert(equalAny(lhv: other, rhv: testValue, baseType: TestContainer.self))
+        XCTAssert(equalAny(lhv: other, rhv: testValue, baseType: Container<TestContainee>.self))
+        
+        // comparisons that don't work
+        XCTAssert(!equalAny(lhv: other, rhv: testValue, baseType: Container<TestContaineeSubType>.self))    // NOT EQUAL!
+    }
+    
+    func testExceptionMessages() {
+        var message = AttributionError.missingAttribute(for: "name").errorDescription
+        XCTAssert(message == "missing attribute: name")
+        message = AttributionError.invalidDereference(error: "dereference").errorDescription
+        XCTAssert(message == "invalid: dereference")
+        message = AttributionError.invalidDistribution(error: "distribution").errorDescription
+        XCTAssert(message == "invalid: distribution")
+        message = AttributionError.invalidFetch(expected: "type", received: "other").errorDescription
+        XCTAssert(message == "expected: type received: other")
+        message = AttributionError.containerFull(max: 3).errorDescription
+        XCTAssert(message == "container full (max=3)")
+        message = AttributionError.runtimeError(error: "unknown").errorDescription
+        XCTAssert(message == "invalid: unknown")
     }
 
 //    func testPerformanceExample() {
@@ -160,58 +266,4 @@ class AttributeTests: XCTestCase {
 //        }
 //    }
 
-}
-
-class TestContainer : Container {
-    typealias T = TestContainee
-    
-    init(size: Int) {
-        self.things = []
-        self.capacity = size
-    }
-    
-    var things: [T]
-    var capacity: Int
-    
-    @discardableResult
-    func add(thing: T) -> Bool {
-        guard (self.things.count < self.capacity) else {
-            return false
-        }
-        self.things.append(thing)
-        return true
-    }
- 
-   @discardableResult
-   func remove(thing: T) -> Bool {
-        if let index = self.things.index(of: thing) {
-            self.things.remove(at: index)
-            return true
-        }
-        return false
-    }
-
-    static func == (lhs: TestContainer, rhs: TestContainer) -> Bool {
-        guard (lhs.things.count == rhs.things.count) else {
-            return false
-        }
-        for ix in lhs.things.indices {
-            if lhs.things[ix] != rhs.things[ix] {
-                return false
-            }
-        }
-        return true
-    }
-}
-
-class TestContainee : Attributed, Equatable {
-    var attributes: Attribution
-    
-    init() {
-        attributes = Attribution()
-    }
-    
-    static func == (lhs: TestContainee, rhs: TestContainee) -> Bool {
-        return lhs.attributes == rhs.attributes
-    }
 }
