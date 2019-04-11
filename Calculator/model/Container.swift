@@ -22,7 +22,8 @@ import Foundation
 //    func find(matching: (key: String, value: Attributable)...) -> [T]
 //}
 
-open class Container<T: Attributed & Equatable>: Attribution, Collection {
+// collections of similarly typed things, accessible by address
+open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection {
     internal static var THING : String {
         get { return "[things]" }     // address key => member of a collection
     }
@@ -36,36 +37,55 @@ open class Container<T: Attributed & Equatable>: Attribution, Collection {
     public init(size: Int) {
         self.things = []
         self.capacity = size
-        
+
         super.init()
+        
+        _id = Attribution.getNextId()
     }
 
-    public convenience init(things: [T]) {
+    public convenience init(things: [T], parent: Addressable?) {
         self.init(size: things.count)
         self.things = things
+        self._parent = parent
     }
     
-    public convenience init?(things: [T], size: Int) {
+    public convenience init?(things: [T], size: Int, parent: Addressable?) {
         guard size >= things.count else {
             return nil
         }
-        self.init(size: size)
-        self.things = things
+        self.init(things: things, parent: parent)
+        self.capacity = size
     }
     
+    private func fullPath(index: Int) -> Address {
+        var parts: [String] = []
+        if let address = self.getAddress() {
+            parts = Address.splitKey(address: address.asString())
+        }
+        return Address(Address.composeKey(path: parts, key: "@\(index)"))!
+    }
+
     @discardableResult
     public func add(thing: T) -> Bool {
         guard capacity == Container.UNLIMITED || things.count < capacity else {
             return false
         }
+        if var child = thing as? Addressable {
+            child.reparent(parent: self)
+        }
         things.append(thing)
+
+        notify(at: fullPath(index: things.count-1), was: nil)
         return true
     }
     
     @discardableResult
     public func remove(thing: T) -> Bool {
         if let index = things.index(of: thing) {
-            things.remove(at: index)
+            if let previous = things.remove(at: index) as? Attributable {
+                notify(at: fullPath(index: things.count-1), was: previous)
+                // ToDo: should the (removed and discarded) child be reparented to nil?
+            }
             return true
         }
         return false
@@ -80,7 +100,7 @@ open class Container<T: Attributed & Equatable>: Attribution, Collection {
             }
             return false
         }
-        return (!found.isEmpty) ? Container.THING : nil
+        return (!found.isEmpty) ? "\(Container.THING):\(childId)" : nil
     }
 
     // NB: the original container is not changed
@@ -126,16 +146,14 @@ open class Container<T: Attributed & Equatable>: Attribution, Collection {
         return found
     }
     
-    override
-    internal func isEqual(other: Attribution) -> Bool {
-        guard let rhs = other as? Container<T>,
-            self.things.count == rhs.things.count else {
+    internal func isEqual(other: Container<T>) -> Bool {
+        guard self.things.count == other.things.count else {
             return false
         }
         
         var ix = self.things.count - 1
         while (0 < ix) {
-            if self.things[ix] != rhs.things[ix] {
+            if self.things[ix] != other.things[ix] {
                 return false
             }
             ix -= 1
@@ -159,6 +177,13 @@ open class Container<T: Attributed & Equatable>: Attribution, Collection {
     
     public subscript(position: Int) -> T {
         return things[position]
+    }
+    
+    public static func == (lhs: Container<T>, rhs: Container<T>) -> Bool {
+        if (lhs === rhs) {
+            return true
+        }
+        return lhs.isEqual(other: rhs)
     }
 }
 

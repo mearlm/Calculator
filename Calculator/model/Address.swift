@@ -12,11 +12,13 @@ import Foundation
 // other primitive Attribute types are not
 // so not all children are Addressable, but all parents must be
 public protocol Addressable {
-    var _parent: Addressable? { get }               // the root object(s) have no parent
+    var _parent: Addressable? { get set }               // the root object(s) have no parent
     var _id: Int { get }
     func getAddress() -> Address?
     func getUniqueId() -> Int
     func findChildKey(for childId: Int) -> String?
+    @discardableResult
+    mutating func reparent(parent: Addressable?) -> Addressable?
 }
 extension Addressable {
     public func getUniqueId() -> Int {
@@ -30,11 +32,22 @@ extension Addressable {
         
         if let key = ancestor.findChildKey(for: self._id) {
             if let path = ancestor.getAddress() {
-                return Address([key, path.asString()].joined(separator: "."))
+                let parts = Address.splitKey(address: path.asString())
+                return Address(Address.composeKey(path: parts, key: key))
             }
             return Address(key)
         }
         return nil
+    }
+    
+    // reparent for structs; classes need to implement non-mutating reparent methods
+    // see: https://www.bignerdranch.com/blog/protocol-oriented-problems-and-the-immutable-self-error/
+    @discardableResult
+    public mutating func reparent(parent: Addressable?) -> Addressable? {
+        let result = self._parent
+        self._parent = parent
+        
+        return result
     }
 }
 
@@ -45,12 +58,15 @@ public class Address : Equatable {
         let keys = path + [key]
         return keys.joined(separator: Address.SEP_CHAR)
     }
+    public static func splitKey(address: String) -> [String] {
+        return address.components(separatedBy: Address.SEP_CHAR)
+    }
     
     private let key: String
     private let path: [String]
     
     init?(_ address: String) {
-        var parts = address.split(separator: Character(Address.SEP_CHAR))
+        var parts = address.components(separatedBy: Address.SEP_CHAR)
         if 0 == parts.count {
             return nil
         }

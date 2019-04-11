@@ -139,7 +139,7 @@ class ContainerTests: XCTestCase {
         let deck = makeDeck()
         XCTAssert(0 == verifyDeck(cards: deck.things))
         
-        let newdeck = Container<Card>(things: deck.shuffle())
+        let newdeck = Container<Card>(things: deck.shuffle(), parent: nil)
         
         let sorted = try! newdeck.sort(by: "suit", "rank")
         XCTAssert(1 == verifyDeck(cards: sorted))
@@ -155,7 +155,7 @@ class ContainerTests: XCTestCase {
             Card(suit: Card.SUITS[2], rank: 1),
             Card(suit: Card.SUITS[3], rank: 1),
         ]
-        let deck = Container<Card>(things: aces)
+        let deck = Container<Card>(things: aces, parent: nil)
         
         XCTAssert(aces.count == deck.count)
         
@@ -179,7 +179,7 @@ class ContainerTests: XCTestCase {
             Card(suit: Card.SUITS[2], rank: 1),
             Card(suit: Card.SUITS[3], rank: 1),
             ]
-        let deck = Container<Card>(things: aces, size: 5)!
+        let deck = Container<Card>(things: aces, size: 5, parent: nil)!
         
         XCTAssert(aces.count == deck.count)
         
@@ -200,7 +200,7 @@ class ContainerTests: XCTestCase {
     func testContainerWithDuplicates() {
         let spadeAce = Card(suit: Card.SUITS[0], rank: 1)
         let heartAce = Card(suit: Card.SUITS[1], rank: 1)
-        let container = Container<Card>(things: [spadeAce, heartAce, spadeAce])
+        let container = Container<Card>(things: [spadeAce, heartAce, spadeAce], parent: nil)
         
         XCTAssert(3 == container.count)
         XCTAssert(container.things[0] != container.things[1])
@@ -211,17 +211,17 @@ class ContainerTests: XCTestCase {
     func testEquality() {
         let spadeAce = Card(suit: Card.SUITS[0], rank: 1)
         let heartAce = Card(suit: Card.SUITS[1], rank: 1)
-        let firstContainer = Container<Card>(things: [spadeAce, heartAce])
-        let secondContainer = Container<Card>(things: [heartAce, spadeAce])
+        let firstContainer = Container<Card>(things: [spadeAce, heartAce], parent: nil)
+        let secondContainer = Container<Card>(things: [heartAce, spadeAce], parent: nil)
         let thirdContainer = Container<Card>(things: [
             Card(suit: Card.SUITS[0], rank: 1),
             Card(suit: Card.SUITS[1], rank: 1)
-        ])
+        ], parent: nil)
         let fourthContainer = Container<Card>(things: [
             Card(suit: Card.SUITS[0], rank: 1),
             Card(suit: Card.SUITS[1], rank: 1),
             Card(suit: Card.SUITS[2], rank: 1)
-        ])
+        ], parent: nil)
 
         XCTAssert(firstContainer == firstContainer)     // identity
         XCTAssert(firstContainer != secondContainer)    // unequal
@@ -233,7 +233,7 @@ class ContainerTests: XCTestCase {
     func testFind() {
         let spadeAce = Card(suit: Card.SUITS[0], rank: 1)
         let heartAce = Card(suit: Card.SUITS[1], rank: 1)
-        let container = Container<Card>(things: [spadeAce, heartAce, spadeAce])
+        let container = Container<Card>(things: [spadeAce, heartAce, spadeAce], parent: nil)
         
         var found = container.find(matching: (key: "suit", value: Card.SUITS[0]))
         XCTAssert(2 == found.count)

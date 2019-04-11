@@ -8,47 +8,31 @@
 
 import Foundation
 
-// dictionaries of typed property values
-open class Attribution : Equatable, Addressable {
-    private static var nextId = 1
-    internal static func getNextId() -> Int {
-        let result = nextId
-        nextId += 1
-        
-        return result
-    }
-    
+// dictionaries of variously typed attribute values, accessable by address
+open class Attribution : Subject, Equatable {
     private var attributes = [String : Attributable]()
-    public var _parent: Addressable? = nil
-    public let _id: Int                                 // immutable, unique
 
+    override
     public init() {
-        _id = Attribution.getNextId()
+        super.init()
     }
     
     convenience public init(parent: Attribution) {
         self.init()
-        self._parent = parent
+        self._parent = parent                           // original parent is nil
     }
     
+    // i.e. clone, but with unique id
     public convenience init(from original: Attribution) {
         self.init()
-        self._parent = original._parent                 // NB: optional parent
+        self.reparent(parent: original._parent)         // NB: optional parent
         self.attributes = original.attributes           // copy on write?
     }
-    
-    // allow for changing the parent of an Attribution or Container
-    // (this is not supported for Distributions)
-    public func reparent(parent: Addressable) -> Addressable? {
-        let result = self._parent
-        self._parent = parent
-        
-        return result
-    }
 
+    override
     public func findChildKey(for childId: Int) -> String? {
         let children = self.attributes.filter( {
-            if let child = $0.value as? Addressable {
+            if let child = $0.value.rawValue() as? Addressable {
                 return childId == child.getUniqueId()
             }
             return false
@@ -56,31 +40,44 @@ open class Attribution : Equatable, Addressable {
         return (!children.isEmpty) ? children.first!.key : nil      // should only ever be one item matching a given ID
     }
     
+    private func fullPath(key: String) -> Address {
+        var parts: [String] = []
+        if let address = self.getAddress() {
+            parts = Address.splitKey(address: address.asString())
+        }
+        return Address(Address.composeKey(path: parts, key: key))!
+    }
+    
     @discardableResult
     public func add(for key: String, value: Attributable?) -> Attribution {
-        if (nil == value) {
-            _ = self.remove(for: key)
+        guard let value = value else {
+            return self.remove(for: key)
         }
-        else {
-            self.attributes[key] = value!
+        
+        let previous = self.attributes[key]
+        self.attributes[key] = value
+        if var child = value.rawValue() as? Addressable {
+            child.reparent(parent: self)
         }
+        
+        notify(at: fullPath(key: key), was: previous)
         return self         // allows chaining adds
     }
     
     @discardableResult
     public func add<T>(for key: String, value: T?) -> Attribution {
         if (nil == value) {
-            _ = self.remove(for: key)
+            return self.remove(for: key)
         }
-        else {
-            self.add(for: key, value: Attribute(value!))
-        }
-        return self
+        return self.add(for: key, value: Attribute(value!))
     }
     
     @discardableResult
     public func remove(for key: String) -> Attribution {
-        self.attributes.removeValue(forKey: key)
+        if let previous = self.attributes[key] {
+            self.attributes.removeValue(forKey: key)
+            notify(at: fullPath(key: key), was: previous)
+        }
         return self         // allows chaining removes
     }
     

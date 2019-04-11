@@ -26,13 +26,13 @@ public struct Distribution<T: Equatable>: Equatable, Addressable {
         get { return members.last! }
     }
     private let limit: Int
+    
+    // Addressable
     public let _id: Int                             // immutable, unique
     public var _parent: Addressable? = nil
 
-    public init(members: Membership<T>, limit: Int, parent: Attribution?) throws {
-        self._id = Attribution.getNextId()
-        self._parent = parent
-
+    public init(members: Membership<T>, limit: Int) throws {
+        self._id = Subject.getNextId()
         self.limit = (limit > 0) ? limit : Distribution.DEFAULT_LIMIT
 
         guard validate(members) else {
@@ -41,12 +41,8 @@ public struct Distribution<T: Equatable>: Equatable, Addressable {
         self.members = members
     }
     
-    public init(members: Membership<T>, parent: Attribution?) throws {
-        try self.init(members: members, limit: Distribution.DEFAULT_LIMIT, parent: parent)
-    }
-    
     public init(members: Membership<T>) throws {
-        try self.init(members: members, limit: Distribution.DEFAULT_LIMIT, parent: nil)
+        try self.init(members: members, limit: Distribution.DEFAULT_LIMIT)
     }
     
     public func findChildKey(for childId: Int) -> String? {
@@ -57,7 +53,7 @@ public struct Distribution<T: Equatable>: Equatable, Addressable {
             }
             return false
         }
-        return (!found.isEmpty) ? Distribution.MEMBER : nil
+        return (!found.isEmpty) ? "\(Distribution.MEMBER):\(childId)" : nil
     }
     
     private func logError(error: String) {
