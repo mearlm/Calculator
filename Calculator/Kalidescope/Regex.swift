@@ -19,7 +19,7 @@ public extension String {
         }
     }
     
-    public func match(regex: String) -> [String]? {
+    func match(regex: String) -> [String]? {
         dprint("regex: \(regex), string: \"\(self)\"")
 
         let expression: NSRegularExpression

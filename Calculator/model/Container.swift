@@ -81,7 +81,7 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
     
     @discardableResult
     public func remove(thing: T) -> Bool {
-        if let index = things.index(of: thing) {
+        if let index = things.firstIndex(of: thing) {
             if let previous = things.remove(at: index) as? Attributable {
                 notify(at: fullPath(index: things.count-1), was: previous)
                 // ToDo: should the (removed and discarded) child be reparented to nil?
