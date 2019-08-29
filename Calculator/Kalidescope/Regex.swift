@@ -11,7 +11,7 @@ import Foundation
 var expressions = [String: NSRegularExpression]()
 public extension String {
     private var _DEBUG : Bool { get {
-        return false
+        return Parser._DEBUG
     }}
     private func dprint(_ text: String) {
         if _DEBUG {

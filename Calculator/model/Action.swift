@@ -8,24 +8,48 @@
 
 import Foundation
 
-public protocol Action {
-    func act(_ args: Attribution) -> Bool
-    func next() -> Action?
-}
-extension Action {
-    // run a sequence of actions
-    public static func run(first: Action, args: Attribution) -> Bool {
+// an action contains pre-compiled (i.e. parsed) code, ready to act on an item (Attribution)
+open class Action {
+    private let nodes: [ExprNode]
+    
+    public init?(expression: String) {
+        guard let nodes = Calculator.TheCalculator.parse(expression) else {
+            return nil
+        }
+        self.nodes = nodes
+    }
+    
+    public func act(on item: Attribution) -> Bool {
         var result = false
-        var action : Action? = first
-        
-        repeat {
-            result = action!.act(args)
-            action = action!.next()
-        } while (result && action != nil)
-        
+        do {
+            try Calculator.TheCalculator.evaluate(nodes: nodes, args:  item)
+            result = true
+        }
+        catch {
+            print(error)        // ToDo: log error
+        }
         return result
     }
 }
+
+//public protocol Action {
+//    func act(_ args: Attribution) -> Bool
+//    func next() -> Action?
+//}
+//extension Action {
+//    // run a sequence of actions
+//    public static func run(first: Action, args: Attribution) -> Bool {
+//        var result = false
+//        var action : Action? = first
+//
+//        repeat {
+//            result = action!.act(args)
+//            action = action!.next()
+//        } while (result && action != nil)
+//
+//        return result
+//    }
+//}
 
 // special actions:
 

@@ -22,7 +22,8 @@ public protocol Notifiable {
 }
 
 // base class for Notifiable subjects
-// i.e. mutable container objects: Container, Attribution, but not immutable Distribution
+// i.e. mutable container objects: Container, Attribution, but not the immutable Distribution
+// notifiable subjects can be "observed" by subscribers
 open class Subject : Notifiable, Addressable {
     private static var nextId = 1
     internal static func getNextId() -> Int {

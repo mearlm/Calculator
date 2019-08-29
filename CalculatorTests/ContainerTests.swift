@@ -82,17 +82,6 @@ class ContainerTests: XCTestCase {
         XCTAssert(!container.isEmpty)
     }
     
-    private func makeDeck() -> Container<Card> {
-        let deck = Container<Card>(size: 52)
-        
-        for suit in Card.SUITS {
-            for rank in 1...13 {
-                deck.add(thing: Card(suit: suit, rank: rank))
-            }
-        }
-        return deck
-    }
-    
     // contains all ranks of all suits, in order
     private func verifyDeck(cards: [Card]) -> Int {
         var ix = -1
@@ -122,7 +111,7 @@ class ContainerTests: XCTestCase {
     }
     
     func testShuffle() {
-        let deck = makeDeck()
+        let deck = Card.makeDeck()
         XCTAssert(0 == verifyDeck(cards: deck.things))
 
         let shuffled = deck.shuffle()
@@ -136,7 +125,7 @@ class ContainerTests: XCTestCase {
     }
     
     func testSort() {
-        let deck = makeDeck()
+        let deck = Card.makeDeck()
         XCTAssert(0 == verifyDeck(cards: deck.things))
         
         let newdeck = Container<Card>(things: deck.shuffle(), parent: nil)
@@ -178,7 +167,7 @@ class ContainerTests: XCTestCase {
             Card(suit: Card.SUITS[1], rank: 1),
             Card(suit: Card.SUITS[2], rank: 1),
             Card(suit: Card.SUITS[3], rank: 1),
-            ]
+        ]
         let deck = Container<Card>(things: aces, size: 5, parent: nil)!
         
         XCTAssert(aces.count == deck.count)
@@ -247,7 +236,7 @@ class ContainerTests: XCTestCase {
     }
     
     func testIterator() {
-        let deck = makeDeck()
+        let deck = Card.makeDeck()
         
         var expected = 0
         for card in deck {

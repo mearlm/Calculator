@@ -48,6 +48,12 @@ struct VariableNode: ExprNode {
     }
 }
 
+struct NoOpNode: ExprNode {
+    var description: String {
+        return "NoOp"
+    }
+}
+
 // operators
 struct UnaryOpNode: ExprNode {
     let op: String
@@ -95,7 +101,7 @@ class IfNodeBuilder : Builder {
     var nextState: String
     
     init() {
-        nextState = "else"      // or endif
+        nextState = "else"          // or endif
     }
     
     func addNode(nodes: [ExprNode], state: String) throws {
@@ -132,23 +138,35 @@ class IfNodeBuilder : Builder {
 
 // foreach <top.iterator.next> do <expression> loop
 struct ForEachNode: ExprNode {
-    let expression: [ExprNode]
+    let element: VariableNode       // the name of the attributed element to iterate over
+    let expression: [ExprNode]      // the statements to execute (per iteration); can reference the element's attributes by name
     var description: String {
         return "ForEachNode(do: \(expression))"
     }
 }
 
 class ForEachNodeBuilder : Builder {
+    var element: VariableNode?
     var expression: [ExprNode]
     var nextState: String
     
     init() {
         expression = []
-        nextState = "loop"
+        nextState = "do"
     }
     
     func addNode(nodes: [ExprNode], state: String) throws {
         switch (state) {
+        case "do":
+            guard state == nextState,
+                nodes.count == 1 else {
+                    throw Errors.UnexpectedToken
+            }
+            guard let node = nodes[0] as? VariableNode else {
+                throw Errors.ExpectedExpression
+            }
+            element = node
+            nextState = "loop"
         case "loop":
             guard state == nextState,
                 nodes.count > 0 else {
@@ -165,7 +183,7 @@ class ForEachNodeBuilder : Builder {
         guard !expression.isEmpty else {
             throw Errors.ExpectedExpression
         }
-        return ForEachNode(expression: expression)
+        return ForEachNode(element: element!, expression: expression)
     }
 }
 

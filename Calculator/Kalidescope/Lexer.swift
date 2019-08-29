@@ -15,6 +15,7 @@ public enum Token {
     case ParensOpen
     case ParensClose
     case Comma
+    case NoOp
     case Other(String)
     case UnaryOp(String)
     case BinaryOp(String)
@@ -48,6 +49,7 @@ public func ==(lhs: Token, rhs: Token) -> Bool {
     case (.ParensOpen, .ParensOpen),
          (.ParensClose, .ParensClose),
          (.Comma, .Comma),
+         (.NoOp, .NoOp),
          (.IfElse, .IfElse),
          (.ForEach, .ForEach),
          (.SubNode, .SubNode):
@@ -65,24 +67,26 @@ public func ==(lhs: Token, rhs: Token) -> Bool {
 // StringLiteral: double-quoted string, optionally containing escaped (doubled) quotes, e.g. "xy""zz""y"
 // Identifier: leading letter/underscore + letters, underscores, or digits, e.g. _An_Identifier, but not 0xyzzy0
 // Number (integer):
+// IfElse: x == 3 if x = 2 else x = 1 endif
 
 typealias TokenGenerator = ([String]) -> Token?
 let tokenList: [(String, TokenGenerator)] = [
+    ("\\s", { _ in nil }),
     ("\\(", { _ in .ParensOpen }),
     ("\\)", { _ in .ParensClose }),
     (",", { _ in .Comma }),
+    ("@@(?=\\s|\\z)", {_ in .NoOp }),
     ("(?i:true|false)\\b", { .Boolean($0[0]) }),
     ("([1-9]\\d?)d([1-9]\\d?)\\b", { .Dice(count: ($0[1] as NSString).integerValue, sides: ($0[2] as NSString).integerValue) }),
-    ("\"([^\"]|\"\")*\"", { .StringLiteral($0[1]) }),
+    ("\"(([^\"]|\"\")*)\"", { .StringLiteral($0[1]) }),
     ("(?i)if\\b", { .IfElse($0[0]) }),
     ("(?i)foreach\\b", { .ForEach($0[0]) }),
-    ("(?i:then|else|endif|do|loop)\\b", { .SubNode($0[0]) }),
+    ("(?i:else|endif|do|loop)\\b", { .SubNode($0[0]) }),
     ("[a-zA-Z_][\\w\\.]*\\b", { .Identifier($0[0]) }),
     // ("[a-zA-Z_][\\w\\.]*\\b", { $0[0] == "def" ? .Define : .Identifier($0[0]) }),
     ("[0-9]+\\b", { .Number(($0[0] as NSString).integerValue) }),
     ("([+-](?=[0-9@])|!(?=[a-zA-Z_@\\(])|@(?=[a-zA-Z_])|\\+\\+(?=[a-zA-Z_])|\\-\\-(?=[a-zA-Z_]))", { .UnaryOp($0[1]) }),
-    ("([=+\\-*/%<>]|&&|\\|\\||<=|==|>=|!=)(?=\\s|\\w|\\()", { .BinaryOp($0[1]) }),
-    ("\\s", { _ in nil }),
+    ("([+\\-*/]=|[=+\\-*/%<>]|&&|\\|\\||<=|==|>=|!=)(?=\\s|\\w|\\()", { .BinaryOp($0[1]) }),
 ]
 
 public class Lexer {
@@ -103,7 +107,7 @@ public class Lexer {
                 if let m = content.match(regex: pattern) {
                     if let t = generator(m) {
                         tokens.append(t)
-                        print("\(m) matched \(t)")
+                        // print("\(m) matched \(t)")
                     }
                     
                     let index = content.index(content.startIndex, offsetBy: m[0].count)

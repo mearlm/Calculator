@@ -13,7 +13,7 @@ public enum AttributionError : LocalizedError {
     case invalidDereference(error: String)                  // attribute dereference returned wrong type
     case invalidDistribution(error: String)                 // distribution failed to select
     case invalidFetch(expected: String, received: String)   // address returned unexpected type
-    case containerFull(max: Int)                            // adding when container is full
+    case containerFull(max: Int)                            // attempting an add when container is full
     case runtimeError(error: String)                        // generic error
     
     public var errorDescription: String? {
@@ -42,7 +42,7 @@ public enum AttributionError : LocalizedError {
 
 // attribute collections:
 // Game -> attributes
-// Hero -> game.hero.attributes
+// Hero -> game.hero.attributes (see Address)
 // CurrentLevel -> game.level[game.currentLevel].attributes
 // Options -> game.options
 // Stats -> game.stats (?)
@@ -60,7 +60,8 @@ public protocol Attributable {
     func asAddress() throws -> Address
     func asAttribution() throws -> Attribution
     func asDistribution<E: Equatable>(of: E.Type) throws -> Distribution<E>
-    func asContainer<E: Equatable>(of ctype: E.Type) throws -> Container<E> 
+    func asContainer<E: Equatable>(of ctype: E.Type) throws -> Container<E>
+    func asCollection() throws -> AnyCollection<Attributed>?
     func asType<E>(_ type: E.Type) throws -> E
     func isEqual(other: Attributable) -> Bool
     
@@ -78,7 +79,7 @@ public struct Attribute<T> : Attributable {
         if let result = value as? R {
             return result
         }
-        throw AttributionError.invalidDereference(error: "For \(type(of: value as Any)), requested: Container<\(type(of: rtype as Any))>")
+        throw AttributionError.invalidDereference(error: "For \(type(of: value as Any)), requested: \(type(of: rtype as Any))")
     }
     
     public func rawValue() -> Any {
@@ -122,6 +123,13 @@ public struct Attribute<T> : Attributable {
         return try tryCast(as: Container<E>.self)
     }
     
+    public func asCollection() -> AnyCollection<Attributed>? {
+        if let result = value as? AnyCollection<Attributed> {
+            return result
+        }
+        return nil
+    }
+
 //    public func asAction() throws -> Action {
 //        return try tryCast(as: Action.self)
 //    }

@@ -82,6 +82,17 @@ class Card: Attributed, Equatable {
     static func == (lhs: Card, rhs: Card) -> Bool {
         return lhs.attributes == rhs.attributes
     }
+    
+    static func makeDeck() -> Container<Card> {
+        let deck = Container<Card>(size: 52)
+        
+        for suit in Card.SUITS {
+            for rank in 1...13 {
+                deck.add(thing: Card(suit: suit, rank: rank))
+            }
+        }
+        return deck
+    }
 }
 
 class CardAttribution: Attribution {

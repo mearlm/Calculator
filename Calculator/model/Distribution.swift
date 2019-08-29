@@ -88,7 +88,7 @@ public struct Distribution<T: Equatable>: Equatable, Addressable {
         return self.last.value                              // should never happen (since last member's weight = Distribution.DEFAULT_LIMIT)
     }
     
-    // find which distribution item is rotated (bidirectionally)
+    // find which distribution item is offset or "rotated" (bidirectionally)
     // from a given starting item, by a specified offset;
     // it considers the distribution items to exist in an endless circular buffer
     // NB: this works as a "find" when by = 0

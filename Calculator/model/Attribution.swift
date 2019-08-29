@@ -66,10 +66,7 @@ open class Attribution : Subject, Equatable {
     
     @discardableResult
     public func add<T>(for key: String, value: T?) -> Attribution {
-        if (nil == value) {
-            return self.remove(for: key)
-        }
-        return self.add(for: key, value: Attribute(value!))
+        return self.add(for: key, value: (nil == value) ? nil : Attribute(value!))
     }
     
     @discardableResult

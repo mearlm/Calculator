@@ -25,7 +25,7 @@ class Parser {
     private(set) var index = 0
     private var stack: [Builder] = []
     
-    private static let _DEBUG = false
+    static let _DEBUG = false
     
     init(tokens: [Token]) {
         self.tokens = tokens
@@ -59,6 +59,14 @@ class Parser {
         _ = popCurrentToken()
     }
     
+    func parseNoOp() throws -> ExprNode {
+        dprint("parseNoOp")
+        guard Token.NoOp == popCurrentToken() else {
+            throw Errors.UnexpectedToken
+        }
+        return NoOpNode()
+    }
+
     func parseNumber() throws -> ExprNode {
         dprint("parseNumber")
         guard let next = popCurrentToken(),
@@ -281,6 +289,8 @@ class Parser {
                 return try parseForEach()
             case .SubNode:
                 return try parseSubNode()
+            case .NoOp:
+                return try parseNoOp()
             default:
                 break
             }
@@ -291,6 +301,10 @@ class Parser {
     // NB: only used with binary ops: "[=+\\-*/%<>] | && | \\|\\| | <= | == | >= | !=
     let operatorPrecedence: [String: Int] = [
         "=":    5,      // loose
+        "+=":   5,
+        "-=":   5,
+        "*=":   8,
+        "/=":   8,
         "||":   10,
         "&&":   12,
         "==":   14,
