@@ -42,9 +42,40 @@ struct DiceNode: ExprNode {
 
 // variables (local attribute storage)
 struct VariableNode: ExprNode {
+    static let SEP_CHAR = "."
+    enum SOURCE {
+        case THIS
+        case ROOT
+        case LOCAL
+    }
+    
     let name: String
+    let parts: [String]
     var description: String {
         return "VariableNode(\(name))"
+    }
+    
+    init(name: String) {
+        self.name = name
+        self.parts = name.components(separatedBy: VariableNode.SEP_CHAR)
+    }
+    
+    func asParts(for src: SOURCE) -> [String] {
+        if (SOURCE.LOCAL != src && parts.count > 1) {      // source.key
+            return Array(parts.dropFirst())
+        }
+        return parts
+    }
+    
+    func getSource(rootAlias: String) -> SOURCE {
+        switch (parts[0]) {
+        case "this":
+            return SOURCE.THIS
+        case rootAlias:
+            return SOURCE.ROOT
+        default:
+            return SOURCE.LOCAL
+        }
     }
 }
 

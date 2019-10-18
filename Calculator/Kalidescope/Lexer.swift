@@ -75,7 +75,7 @@ let tokenList: [(String, TokenGenerator)] = [
     ("\\(", { _ in .ParensOpen }),
     ("\\)", { _ in .ParensClose }),
     (",", { _ in .Comma }),
-    ("@@(?=\\s|\\z)", {_ in .NoOp }),
+    ("@@(?=\\s|\\z)", { _ in .NoOp }),
     ("(?i:true|false)\\b", { .Boolean($0[0]) }),
     ("([1-9]\\d?)d([1-9]\\d?)\\b", { .Dice(count: ($0[1] as NSString).integerValue, sides: ($0[2] as NSString).integerValue) }),
     ("\"(([^\"]|\"\")*)\"", { .StringLiteral($0[1]) }),

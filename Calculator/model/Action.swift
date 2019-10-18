@@ -9,7 +9,7 @@
 import Foundation
 
 // an action contains pre-compiled (i.e. parsed) code, ready to act on an item (Attribution)
-open class Action {
+public class Action {
     private let nodes: [ExprNode]
     
     public init?(expression: String) {
@@ -22,7 +22,7 @@ open class Action {
     public func act(on item: Attribution) -> Bool {
         var result = false
         do {
-            try Calculator.TheCalculator.evaluate(nodes: nodes, args:  item)
+            try Calculator.TheCalculator.evaluate(nodes: nodes, this: item)
             result = true
         }
         catch {

@@ -8,7 +8,7 @@
 
 import Foundation
 
-// the calculator parses the expression, and uses data from the args
+// the calculator parses the expression, and uses data from the this or root attribution
 // to evaluate numerical, boolean or string results.
 // the results may be used to update the same or other properties,
 // generate events, or signal the UI.
@@ -39,9 +39,18 @@ enum CalculationError: LocalizedError {
 }
 
 public class Calculator {
-    public static let TheCalculator = Calculator()      // default calculator
+    public static let TheCalculator = Calculator(root: nil, alias: nil)      // default calculator
     private static let rogueRand = RogueRand()
     public static var useRogueRand = false
+    
+    private let root : Attribution?             // access via root (rootAlias) keyword
+    private let rootAlias: String
+    private var this: Attribution? = nil        // access via "this" keyword
+    
+    public init(root: Attribution?, alias: String?) {
+        self.root = root
+        self.rootAlias = (nil == alias) ? "root" : alias!
+    }
     
     // result: 0 to limit - 1
     public static func rand(_ limit: Int) -> Int {
@@ -53,10 +62,12 @@ public class Calculator {
 
     private var dataStack = [Attributable]()
 
-    public func calculate(for expression: String, with args: Attribution) throws -> Bool {
+    public func calculate(for expression: String, with this: Attribution) throws -> Bool {
+        self.this = this
+        
         if let nodes = parse(expression) {
             // print(String(describing: nodes))
-            try evaluate(nodes: nodes, args: args, flip: false)
+            try evaluate(nodes: nodes, flip: false)
             return true
         }
         
@@ -89,11 +100,12 @@ public class Calculator {
         return nil
     }
     
-    func evaluate(nodes: [ExprNode], args: Attribution) throws {
-        try evaluate(nodes: nodes, args: args, flip: false)
+    func evaluate(nodes: [ExprNode], this: Attribution) throws {
+        self.this = this
+        try evaluate(nodes: nodes, flip: false)
     }
 
-    private func evaluate(nodes: [ExprNode], args: Attribution, flip: Bool) throws {
+    private func evaluate(nodes: [ExprNode], flip: Bool) throws {
         for node in nodes {
             switch node {
             case is NumberNode:
@@ -111,7 +123,18 @@ public class Calculator {
                 push(bool.value)
             case is VariableNode:
                 let addr = node as! VariableNode
-                if let addrNode = Address(addr.name) {
+                
+                let source = addr.getSource(rootAlias: self.rootAlias)
+                switch (source) {
+                case VariableNode.SOURCE.THIS:
+                    push(self.this)
+                case VariableNode.SOURCE.ROOT:
+                    push(self.root)
+                default:
+                    break               // use current top-of-stack
+                }
+                
+                if let addrNode = Address(addr.asParts(for: source)) {
                     push(addrNode)
                 }
                 // ToDo: else... what?
@@ -124,12 +147,13 @@ public class Calculator {
                 let node = node as! UnaryOpNode
 
                 // convert rhs into top item on stack
-                try evaluate(nodes: [node.rhs], args: args, flip: false)
+                try evaluate(nodes: [node.rhs], flip: false)
 
                 switch node.op {
                 case "@", "++", "--":
                     // read address from top-of-stack
-                    guard let addr = try pop()?.asAddress() else {
+                    guard let addr = try pop()?.asAddress(),
+                        let args = try pop()?.asAttribution() else {
                         throw CalculationError.emptyStackError
                     }
                     
@@ -168,18 +192,20 @@ public class Calculator {
             case is BinaryOpNode:
                 let node = node as! BinaryOpNode
                 
-                try evaluate(nodes: [node.rhs], args: args, flip: false)    // rhs is new second-top item on stack
-                try evaluate(nodes: [node.lhs], args: args, flip: true)     // lhs is new top item on stack
+                try evaluate(nodes: [node.rhs], flip: false)    // rhs is new second-top item on stack
+                try evaluate(nodes: [node.lhs], flip: true)     // lhs is new top item on stack
 
                 switch node.op {
                 case "=":                    // assignment
                     guard let addr = try pop()?.asAddress(),
+                        let args = try pop()?.asAttribution(),
                         let value = pop() else {
                             throw CalculationError.emptyStackError
                     }
                     try addr.store(value: value, args: args)
                 case "+=", "-=", "*=", "/=":
                     guard let addr = try pop()?.asAddress(),
+                        let args = try pop()?.asAttribution(),
                         var increment = try pop()?.asInt() else {
                             throw CalculationError.emptyStackError
                     }
@@ -222,24 +248,24 @@ public class Calculator {
                 case "<=":
                     let lhs = NumberNode(value: try (pop()?.asInt())!)
                     let rhs = NumberNode(value: try (pop()?.asInt())!)
-                    try evaluate(nodes: [UnaryOpNode(op: "!", rhs: BinaryOpNode(op: ">", lhs: lhs, rhs: rhs))], args: args, flip: false)
+                    try evaluate(nodes: [UnaryOpNode(op: "!", rhs: BinaryOpNode(op: ">", lhs: lhs, rhs: rhs))], flip: false)
                 case "==":
                     try equals()
                 case ">=":
                     let lhs = NumberNode(value: try (pop()?.asInt())!)
                     let rhs = NumberNode(value: try (pop()?.asInt())!)
-                    try evaluate(nodes: [UnaryOpNode(op: "!", rhs: BinaryOpNode(op: "<", lhs: lhs, rhs: rhs))], args: args, flip: false)
+                    try evaluate(nodes: [UnaryOpNode(op: "!", rhs: BinaryOpNode(op: "<", lhs: lhs, rhs: rhs))], flip: false)
                 case "!=":
                     let lhs = NumberNode(value: try (pop()?.asInt())!)
                     let rhs = NumberNode(value: try (pop()?.asInt())!)
-                    try evaluate(nodes: [UnaryOpNode(op: "!", rhs: BinaryOpNode(op: "==", lhs: lhs, rhs: rhs))], args: args, flip: false)
+                    try evaluate(nodes: [UnaryOpNode(op: "!", rhs: BinaryOpNode(op: "==", lhs: lhs, rhs: rhs))], flip: false)
                 default:
                     throw CalculationError.invalidBinaryOp(error: node.description)
                 }
             case is IfNode:
-                try processIf(node: node as! IfNode, args: args)
+                try processIf(node: node as! IfNode)
             case is ForEachNode:
-                try processForEach(node: node as! ForEachNode, args: args)
+                try processForEach(node: node as! ForEachNode)
             case is CallNode:
                 let node = node as! CallNode
 
@@ -250,7 +276,7 @@ public class Calculator {
                     try drop()
                 case "min", "max":
                     for arg in node.arguments {
-                        try evaluate(nodes: [arg], args: args, flip: false)
+                        try evaluate(nodes: [arg], flip: false)
                     }
                     push(node.arguments.count)
 
@@ -261,23 +287,24 @@ public class Calculator {
                         try compare(node: node)      // max(n1, n2, ...)
                     }
                 case "rand":
-                    try evaluate(nodes: [node.arguments[0]], args: args, flip: false)    // limit
+                    try evaluate(nodes: [node.arguments[0]], flip: false)    // limit
                     try rand()          // rand(limit)
                 case "exists":
-                    try evaluate(nodes: [node.arguments[0]], args: args, flip: false)    // address (incl. key)
-                    guard let addr = try pop()?.asAddress() else {
+                    try evaluate(nodes: [node.arguments[0]], flip: false)    // address (incl. key)
+                    guard let addr = try pop()?.asAddress(),
+                        let args = try pop()?.asAttribution() else {
                         throw CalculationError.emptyStackError
                     }
                     push(try addr.exists(args: args))
                 case "select":
-                    try evaluate(nodes: [node.arguments[0]], args: args, flip: false)    // distribution
+                    try evaluate(nodes: [node.arguments[0]], flip: false)    // distribution
                     try select()
                 case "signed":
-                    try evaluate(nodes: [node.arguments[0]], args: args, flip: false)    // number
+                    try evaluate(nodes: [node.arguments[0]], flip: false)    // number
                     try signedNumber()
                 case "describe":
-                    try evaluate(nodes: [node.arguments[1]], args: args, flip: false)    // name
-                    try evaluate(nodes: [node.arguments[0]], args: args, flip: true)    // count
+                    try evaluate(nodes: [node.arguments[1]], flip: false)    // name
+                    try evaluate(nodes: [node.arguments[0]], flip: true)    // count
                     try describe()      // describe(count, name)
                 default:
                     throw CalculationError.invalidCall(error: node.description)
@@ -302,23 +329,7 @@ public class Calculator {
         self.dataStack.append(value)
     }
     
-    private func push(_ value: Int) {
-        self.push(Attribute(value))
-    }
-    
-    private func push(_ value: Bool) {
-        self.push(Attribute(value))
-    }
-    
-    private func push(_ value: String) {
-        self.push(Attribute(value))
-    }
-
-    private func push(_ value: Dice) {
-        self.push(Attribute(value))
-    }
-    
-    private func push(_ value: Address) {
+    private func push<T: Equatable>(_ value: T) {
         self.push(Attribute(value))
     }
 
@@ -495,7 +506,7 @@ public class Calculator {
         guard let value = try pop()?.asDistribution(of: Attribution.self) else {
             throw CalculationError.emptyStackError
         }
-        push(Attribute(value.select()))
+        push(value.select())
     }
     
     private func throwDice() throws{
@@ -560,41 +571,60 @@ public class Calculator {
         }
     }
     
-    private func processIf(node: IfNode, args: Attribution) throws {
+    private func processIf(node: IfNode) throws {
         guard let value = try pop()?.asBool() else {
             throw CalculationError.emptyStackError
         }
         if (value) {
-            try evaluate(nodes: node.thenClause, args: args, flip: false)
+            try evaluate(nodes: node.thenClause, flip: false)
         }
         else if (!node.elseClause.isEmpty) {
-            try evaluate(nodes: node.elseClause, args: args, flip: false)
+            try evaluate(nodes: node.elseClause, flip: false)
         }
     }
     
     // ToDo: expand to operate on Distribution objects?
-    private func processForEach(node: ForEachNode, args: Attribution) throws {
-        guard let addr = try pop()?.asAddress() else {
+    private func processForEach(node: ForEachNode) throws {
+        guard let addr = try pop()?.asAddress(),
+            let args = try pop()?.asAttribution() else {
             throw CalculationError.emptyStackError
         }
-        if let collectionWrapper = try addr.fetch(args: args) {
-            // ToDo: way ugly!
-            // ... but I can't find any way to coerce the type on the stack to a Container/Collection
-            let mirror = Mirror(reflecting: collectionWrapper.rawValue())
-            for child in mirror.children {
-                if (child.label == "things") {
-                    // ... although, this cast seems to work
-                    if let elements = child.value as? Array<Attributed> {
-                        let name = node.element.name
-                        for element in elements {
-                            args.add(for: name, value: element.attributes)
-                            try evaluate(nodes: node.expression, args: args, flip: false)
-                        }
-                        args.remove(for: name)
-                    }
-                }
+        if let wrapper = try addr.fetch(args: args) {
+            let collection = try wrapper.asContainer()
+            for element in collection.things {
+                push(element)       // SOURCE.LOCAL
+                try evaluate(nodes: node.expression, flip: false)
             }
         }
+//        if let collectionWrapper = try addr.fetch(args: args) {
+//            let container = try collectionWrapper.asType(type(of: collectionWrapper.rawValue() as Any))
+//            let name = node.element.name
+//
+//            for element in container {
+//                args.add(for: name, value: element)
+//                try evaluate(nodes: node.expression, args: args, flip: false)
+//            }
+//            args.remove(for: name)
+
+            // ToDo: way ugly!
+            // ... but I can't find any way to coerce the type on the stack to a Container/Collection
+//            let mirror = Mirror(reflecting: collectionWrapper.rawValue())
+//            let name = node.element.name
+//
+//            for child in mirror.children {
+//                if (child.label == "things") {
+//                    // ... although, this cast seems to work
+//                    if let elements = child.value as? Array<Attribution> {
+//                        for element in elements {
+//                            args.add(for: name, value: element)
+//                            try evaluate(nodes: node.expression, flip: false)
+//                        }
+//                        args.remove(for: name)
+//                    }
+//                    return
+//                }
+//            }
+//        }
     }
 }
 

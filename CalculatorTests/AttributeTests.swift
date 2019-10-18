@@ -67,7 +67,7 @@ class AttributeTests: XCTestCase {
     }
 
     func testAddress() {
-        let testValue = Address("a.b.c")
+        let testValue = Address(["a", "b", "c"])
         let attr = Attribute(testValue)
         let value = try! attr.asAddress()
         XCTAssert(value == testValue)
@@ -181,10 +181,10 @@ class AttributeTests: XCTestCase {
     
     func testContainerAsType() {
         let testValue = TestContainer(size: 5)
-        testValue.add(thing: TestContainee(with: Attribution()))
-        testValue.add(thing: TestContainee(with: Attribution()))
-        testValue.add(thing: TestContainee(with: Attribution()))
-        testValue.add(thing: TestContainee(with: Attribution()))
+        testValue.add(thing: Attribution())
+        testValue.add(thing: Attribution())
+        testValue.add(thing: Attribution())
+        testValue.add(thing: Attribution())
         
         let attr = Attribute(testValue)
         let value = try! attr.asType(TestContainer.self)
@@ -195,18 +195,18 @@ class AttributeTests: XCTestCase {
     
     func testContainerAsContainer() {
         let testValue = TestContainer(size: 5)
-        testValue.add(thing: TestContainee(with: Attribution()))
-        testValue.add(thing: TestContainee(with: Attribution()))
-        testValue.add(thing: TestContainee(with: Attribution()))
-        testValue.add(thing: TestContainee(with: Attribution()))
+        testValue.add(thing: Attribution())
+        testValue.add(thing: Attribution())
+        testValue.add(thing: Attribution())
+        testValue.add(thing: Attribution())
         
         let attr = Attribute(testValue)
-        let value = try! attr.asContainer(of: TestContainee.self)
+        let value = try! attr.asContainer()
         XCTAssert(value == testValue)
-        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Container<Containee>.self))
+        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue)))  // Container<Attribution>.self))
         do {
-            _ = try attr.asContainer(of: TestContaineeSubType.self)
-            throw AttributionError.runtimeError(error: "exception expected")
+            _ = try attr.asContainer()
+//            throw AttributionError.runtimeError(error: "exception expected")
         } catch AttributionError.invalidDereference(let message) {
             print(AttributionError.invalidDereference(error: message).errorDescription!)
         } catch {
@@ -218,30 +218,36 @@ class AttributeTests: XCTestCase {
     // NB: cannot retrieve container of subtype objects!
     func testContainerAsSubTypeContainer() {
         let testValue = TestContainer(size: 5)
-        testValue.add(thing: TestContaineeSubType(with: Attribution()))
-        testValue.add(thing: TestContaineeSubType(with: Attribution()))
-        testValue.add(thing: TestContaineeSubType(with: Attribution()))
-        testValue.add(thing: TestContaineeSubType(with: Attribution()))
+        testValue.add(thing: Card())
+        testValue.add(thing: Card())
+        testValue.add(thing: Card())
+        testValue.add(thing: Card())
         
         let attr = Attribute(testValue)
-        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue))) // Container<TestContainee>.self))
-        let value = try! attr.asContainer(of: TestContainee.self)                   // content type
+        XCTAssert(equalAny(lhv: testValue as Any, rhv: attr.rawValue(), baseType: type(of: testValue))) // Container<Card>.self))
+        let value = try! attr.asContainer()     // content type
         XCTAssert(value == testValue)
-        let other = try! attr.asType(TestContainer.self)                            // container type
+        let other = try! attr.asType(Container.self)   // container type
         XCTAssert(other == testValue)
-        let third = try! attr.asType(Container<TestContainee>.self)                 // container incl. content type
-        XCTAssert(third == testValue)
 
-        // things that don't work :( [NB: TestContainer is declared as Container<TestContainee>]
-        XCTAssertThrowsError(try attr.asContainer(of: TestContaineeSubType.self))   // content type FAILS!
-        XCTAssertThrowsError(try attr.asType(Container<TestContaineeSubType>.self)) // container incl. content type FAILS!
+        do {
+            _ = try attr.asType(Container.self)              // container incl. content
+            // throw AttributionError.runtimeError(error: "exception expected")
+        } catch AttributionError.invalidDereference(let message) {
+            print(AttributionError.invalidDereference(error: message).errorDescription!)
+        } catch {
+            print(error)
+            XCTFail()
+        }
+
+//      XCTAssert(third.isEqual(other: testValue))
         
         // comparisons that do work
         XCTAssert(equalAny(lhv: other, rhv: testValue, baseType: TestContainer.self))
-        XCTAssert(equalAny(lhv: other, rhv: testValue, baseType: Container<TestContainee>.self))
+        XCTAssert(equalAny(lhv: other, rhv: testValue, baseType: Container.self))
         
         // comparisons that don't work
-        XCTAssert(!equalAny(lhv: other, rhv: testValue, baseType: Container<TestContaineeSubType>.self))    // NOT EQUAL!
+        XCTAssert(!equalAny(lhv: other, rhv: testValue, baseType: Container.self))    // NOT EQUAL!
     }
     
     func testExceptionMessages() {

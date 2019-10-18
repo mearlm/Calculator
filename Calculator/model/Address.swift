@@ -32,10 +32,12 @@ extension Addressable {
         
         if let key = ancestor.findChildKey(for: self._id) {
             if let path = ancestor.getAddress() {
-                let parts = Address.splitKey(address: path.asString())
-                return Address(Address.composeKey(path: parts, key: key))
+                var parts = path.asParts()  // parent address
+                parts += [key]              // append (child) key
+                
+                return Address(parts)
             }
-            return Address(key)
+            return Address([key])
         }
         return nil
     }
@@ -52,26 +54,20 @@ extension Addressable {
 }
 
 public class Address : Equatable {
-    private static let SEP_CHAR = "."
-    
-    public static func composeKey(path: [String], key: String) -> String {
-        let keys = path + [key]
-        return keys.joined(separator: Address.SEP_CHAR)
-    }
-    public static func splitKey(address: String) -> [String] {
-        return address.components(separatedBy: Address.SEP_CHAR)
-    }
-    
     private let key: String
     private let path: [String]
     
-    init?(_ address: String) {
-        var parts = address.components(separatedBy: Address.SEP_CHAR)
+    init?(_ parts: [String]) {
+        var parts = parts           // let parameter => var
         if 0 == parts.count {
             return nil
         }
         self.key = String(parts.removeLast())
-        self.path = parts.map{String($0)}
+        self.path = parts   //.map{String($0)}
+    }
+    
+    func asParts() -> [String] {
+        return self.path + [key]
     }
     
     private func resolvePath(args: Attribution) throws -> Attribution {
@@ -98,14 +94,6 @@ public class Address : Equatable {
         let attribution = try resolvePath(args: args)
         return attribution.get(for: self.key)
     }
-
-//    func fetch<T>(args: Attribution) throws -> T {
-//        let value = try self.fetch(args: args)
-//        if let result = value as? T {
-//            return result
-//        }
-//        throw AttributionError.invalidFetch(expected: String(describing: T.self), received: String(describing: type(of: value)))
-//    }
     
     // NB: store a nil value => delete key from Attribution
     func store(value: Attributable?, args: Attribution) throws {
@@ -114,13 +102,14 @@ public class Address : Equatable {
     }
     
     // NB: can't distinguish value-types for attribution.add at compile time
-    func store<T>(value: T?, args: Attribution) throws {
+    func store<T: Equatable>(value: T?, args: Attribution) throws {
         let attribution = try resolvePath(args: args)
         attribution.add(for: key, value: value)
     }
     
     func asString() -> String {
-        return Address.composeKey(path: self.path, key: self.key)
+        let keys = path + [key]
+        return keys.joined(separator: VariableNode.SEP_CHAR)
     }
     
     public static func ==(lhs: Address, rhs: Address) -> Bool {

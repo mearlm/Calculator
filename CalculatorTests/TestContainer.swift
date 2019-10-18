@@ -9,47 +9,30 @@
 import Foundation
 import Calculator
 
-class TestContainer : Container<TestContainee> {
+class TestContainer : Container {
 }
 
-class TestContainee : Attributed, Equatable {
-    var attributes: Attribution
-    
-    init(with value: Attribution) {
-        attributes = value
-    }
-    
-    static func == (lhs: TestContainee, rhs: TestContainee) -> Bool {
-        return lhs.attributes == rhs.attributes
-    }
+class TestContainee : Attribution {
 }
 
-class TestContaineeSubType : TestContainee {
-    let subType = true
-}
-
-class Card: Attributed, Equatable {
+class Card: Attribution {
     static let SUITS = ["Spades", "Hearts", "Diamonds", "Clubs"]
 
-    var attributes: Attribution
-    
-    private init(with value: CardAttribution) {
-        attributes = value
-    }
-    
     convenience init(suit: String, rank: Int) {
-        self.init(with: CardAttribution(suit: suit, rank: rank))
+        self.init()
+        self.add(for: "suit", value: Attribute(suit))
+        self.add(for: "rank", value: Attribute(rank))
     }
     
     func suitName() -> String {
-        if let attr = attributes.get(for: "suit") {
+        if let attr = get(for: "suit") {
             return try! attr.asString()
         }
         return "?"
     }
     
     func rank() -> Int {
-        if let attr = attributes.get(for: "rank") {
+        if let attr = get(for: "rank") {
             return try! attr.asInt()
         }
         return 0
@@ -79,12 +62,8 @@ class Card: Attributed, Equatable {
         return "\(rank)?"
     }
     
-    static func == (lhs: Card, rhs: Card) -> Bool {
-        return lhs.attributes == rhs.attributes
-    }
-    
-    static func makeDeck() -> Container<Card> {
-        let deck = Container<Card>(size: 52)
+    static func makeDeck() -> Container {
+        let deck = Container(size: 52)
         
         for suit in Card.SUITS {
             for rank in 1...13 {
@@ -92,13 +71,5 @@ class Card: Attributed, Equatable {
             }
         }
         return deck
-    }
-}
-
-class CardAttribution: Attribution {
-    init(suit: String, rank: Int) {
-        super.init()
-        self.add(for: "suit", value: Attribute(suit))
-        self.add(for: "rank", value: Attribute(rank))
     }
 }

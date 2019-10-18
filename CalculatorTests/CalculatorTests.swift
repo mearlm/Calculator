@@ -198,11 +198,11 @@ class CalculatorTests: XCTestCase {
     
     func testAttrAssignment() {
         let attr = Attribution()
-        assignmentTest(expression: "x = 3", attr: attr, actual: 3)     // assignment of missing attribute
-        assignmentTest(expression: "x += 3", attr: attr, actual: 6)
-        assignmentTest(expression: "x -= 8", attr: attr, actual: -2)
-        assignmentTest(expression: "x *= -2", attr: attr, actual: 4)
-        assignmentTest(expression: "x /= 4", attr: attr, actual: 1)
+        assignmentTest(expression: "this.x = 3", attr: attr, actual: 3)     // assignment of missing attribute
+        assignmentTest(expression: "this.x += 3", attr: attr, actual: 6)
+        assignmentTest(expression: "this.x -= 8", attr: attr, actual: -2)
+        assignmentTest(expression: "this.x *= -2", attr: attr, actual: 4)
+        assignmentTest(expression: "this.x /= 4", attr: attr, actual: 1)
     }
     
     func testAttrIncrDecr() {
@@ -210,8 +210,8 @@ class CalculatorTests: XCTestCase {
         attr.add(for: "x", value: 3)
         
         // NB: x++, x-- NOT supported (lexer fails)
-        testIncrDecr(expression: "++x", attr: attr, actual: 4)
-        testIncrDecr(expression: "--x", attr: attr, actual: 3)
+        testIncrDecr(expression: "++this.x", attr: attr, actual: 4)
+        testIncrDecr(expression: "--this.x", attr: attr, actual: 3)
     }
 
     func testAttrFetch() {
@@ -219,7 +219,7 @@ class CalculatorTests: XCTestCase {
         attr.add(for: "x", value: 3)
         
         // NB: @<var> pulls the attribute's value onto the top of the stack
-        testIncrDecr(expression: "@x", attr: attr, actual: 3)
+        testIncrDecr(expression: "@this.x", attr: attr, actual: 3)
         do {
             let top = try Calculator.TheCalculator.value()!.asType(Int.self)
             XCTAssertEqual(top, 3)
@@ -233,13 +233,13 @@ class CalculatorTests: XCTestCase {
     
     // except for assignment (=), an attribute must already be defined (and of the correct type)
     func testMissingAttributeError() {
-        attrMissingError(expression: "@x", message: "UnaryOpNode(@, rhs: VariableNode(x))")
-        attrMissingError(expression: "++x", message: "UnaryOpNode(++, rhs: VariableNode(x))")
-        attrMissingError(expression: "x += 2", message: "BinaryOpNode(+=, lhs: VariableNode(x), rhs: NumberNode(2))")
+        attrMissingError(expression: "@this.x", message: "UnaryOpNode(@, rhs: VariableNode(this.x))")
+        attrMissingError(expression: "++this.x", message: "UnaryOpNode(++, rhs: VariableNode(this.x))")
+        attrMissingError(expression: "this.x += 2", message: "BinaryOpNode(+=, lhs: VariableNode(this.x), rhs: NumberNode(2))")
     }
     
     func testAttrTypeError() {
-        attrTypeError(expression: "++x", message: "invalid: For String, requested: Int.Type")
+        attrTypeError(expression: "++this.x", message: "invalid: For String, requested: Int.Type")
     }
 
     func testBinaryOps() {
@@ -297,7 +297,7 @@ class CalculatorTests: XCTestCase {
         attr.add(for: "x", value: testValue)
         if let node: CallNode = testSingleExpressionParse(expression: "z = select(@x)") {
             do {
-                try Calculator.TheCalculator.evaluate(nodes: [node], args: attr)
+                try Calculator.TheCalculator.evaluate(nodes: [node], this: attr)
                 XCTAssert(!Calculator.TheCalculator.hasValue())         // stack is empty
                 if let selected = try attr.get(for: "z")?.asAttribution() {
                     var weight = 0
@@ -341,15 +341,15 @@ class CalculatorTests: XCTestCase {
         let attr = Attribution()
         attr.add(for: "x", value: 4)
         
-        testIfNode(expression: "@x == 4 if y = @x x = 3 endif", expected: 3, attr: attr)
-        testIfNode(expression: "@x == 3 if x = 2 else x = 1 endif", expected: 2, attr: attr)
-        testIfNode(expression: "@x == 3 if x = 2 else x = 1 endif", expected: 1, attr: attr)
+        testIfNode(expression: "@this.x == 4 if this.y = @this.x this.x = 3 endif", expected: 3, attr: attr)
+        testIfNode(expression: "@this.x == 3 if this.x = 2 else this.x = 1 endif", expected: 2, attr: attr)
+        testIfNode(expression: "@this.x == 3 if this.x = 2 else this.x = 1 endif", expected: 1, attr: attr)
 
-        testIfNode(expression: "4 @x == 1 if x = @@ else drop() x = 1 endif", expected: 4, attr: attr)
-        testIfNode(expression: "4 @x == 1 if x = @@ else drop() x = 1 endif", expected: 1, attr: attr)
+        testIfNode(expression: "4 @this.x == 1 if this.x = @@ else drop() this.x = 1 endif", expected: 4, attr: attr)
+        testIfNode(expression: "4 @this.x == 1 if this.x = @@ else drop() this.x = 1 endif", expected: 1, attr: attr)
         
-        testIfNode(expression: "3 dup() == 2 if x = @@ * 2 else x = @@ endif", expected: 3, attr: attr)
-        testIfNode(expression: "3 2 == dup() if x = @@ * 2 else x = @@ endif", expected: 3, attr: attr)
+        testIfNode(expression: "3 dup() == 2 if this.x = @@ * 2 else this.x = @@ endif", expected: 3, attr: attr)
+        testIfNode(expression: "3 2 == dup() if this.x = @@ * 2 else this.x = @@ endif", expected: 3, attr: attr)
 
         XCTAssertEqual(try! attr.get(for: "y")?.asInt(), 4)
     }
@@ -360,9 +360,9 @@ class CalculatorTests: XCTestCase {
         attr.add(for: "sum", value: 0)
         attr.add(for: "count", value: 0)
 
-        if let nodes = testMultiExpressionParse(expression: "deck foreach card do sum += @card.rank count += 1 loop") {
+        if let nodes = testMultiExpressionParse(expression: "this.deck foreach card do this.sum += @card.rank this.count += 1 loop") {
             do {
-                try Calculator.TheCalculator.evaluate(nodes: nodes, args: attr)
+                try Calculator.TheCalculator.evaluate(nodes: nodes, this: attr)
                 XCTAssert(!Calculator.TheCalculator.hasValue())         // stack is empty
                 XCTAssertEqual(try attr.get(for: "sum")?.asInt(), 364)
                 XCTAssertEqual(try attr.get(for: "count")?.asInt(), 52)
@@ -383,14 +383,14 @@ class CalculatorTests: XCTestCase {
         let attr = Attribution()
         attr.add(for: "xy", value: 132)
 
-        testCallNode(expression: "exists(xy)", expected: true, attr: attr)
-        testCallNode(expression: "exists(yx)", expected: false, attr: attr)
+        testCallNode(expression: "exists(this.xy)", expected: true, attr: attr)
+        testCallNode(expression: "exists(this.yx)", expected: false, attr: attr)
         
         // nested attributes
         let attr2 = Attribution()
         attr2.add(for: "indirect", value: attr)
-        testCallNode(expression: "exists(xy)", expected: false, attr: attr2)
-        testCallNode(expression: "exists(indirect.xy)", expected: true, attr: attr2)
+        testCallNode(expression: "exists(this.xy)", expected: false, attr: attr2)
+        testCallNode(expression: "exists(this.indirect.xy)", expected: true, attr: attr2)
     }
     
     func testSigned() {
@@ -410,7 +410,7 @@ class CalculatorTests: XCTestCase {
 
     func testDivideByZero() {
         if let node: BinaryOpNode = testSingleExpressionParse(expression: "4 / 0") {
-            XCTAssertThrowsError(try Calculator.TheCalculator.evaluate(nodes: [node], args: Attribution())) { (error) in
+            XCTAssertThrowsError(try Calculator.TheCalculator.evaluate(nodes: [node], this: Attribution())) { (error) in
                 do {
                     XCTAssertEqual(error.localizedDescription,
                                    CalculationError.divideByZero(error: "4").localizedDescription)
@@ -423,7 +423,7 @@ class CalculatorTests: XCTestCase {
     func testMultiOp<T: Equatable>(expression: String, expected: T, attr: Attribution) {
         if let nodes = testMultiExpressionParse(expression: expression) {
             do {
-                try Calculator.TheCalculator.evaluate(nodes: nodes, args: attr)
+                try Calculator.TheCalculator.evaluate(nodes: nodes, this: attr)
                 XCTAssert(Calculator.TheCalculator.hasValue())         // stack is not empty
                 if let actual = try Calculator.TheCalculator.value()?.asType(T.self) {
                     XCTAssertEqual(expected, actual)
@@ -440,7 +440,7 @@ class CalculatorTests: XCTestCase {
     private func testIfNode<T: Equatable>(expression: String, expected: T, attr: Attribution) {
         if let nodes = testMultiExpressionParse(expression: expression) {
             do {
-                try Calculator.TheCalculator.evaluate(nodes: nodes, args: attr)
+                try Calculator.TheCalculator.evaluate(nodes: nodes, this: attr)
                 XCTAssert(!Calculator.TheCalculator.hasValue())         // stack is empty
                 XCTAssertEqual(try attr.get(for: "x")?.asType(T.self), expected)
                 return
@@ -473,7 +473,7 @@ class CalculatorTests: XCTestCase {
         
         if let node: UnaryOpNode = testSingleExpressionParse(expression: expression) {
             do {
-                XCTAssertThrowsError(try Calculator.TheCalculator.evaluate(nodes: [node], args: attr)) { (error) in
+                XCTAssertThrowsError(try Calculator.TheCalculator.evaluate(nodes: [node], this: attr)) { (error) in
                     do {
                         XCTAssertEqual(error.localizedDescription, message)
                     }
@@ -489,7 +489,7 @@ class CalculatorTests: XCTestCase {
         
         if let node: UnaryOpNode = testSingleExpressionParse(expression: expression) {
             do {
-                XCTAssertThrowsError(try Calculator.TheCalculator.evaluate(nodes: [node], args: attr)) { (error) in
+                XCTAssertThrowsError(try Calculator.TheCalculator.evaluate(nodes: [node], this: attr)) { (error) in
                     do {
                         XCTAssertEqual(error.localizedDescription,
                                        AttributionError.missingAttribute(for: message).localizedDescription)
@@ -503,7 +503,7 @@ class CalculatorTests: XCTestCase {
     private func assignmentTest(expression: String, attr: Attribution, actual: Int) {
         if let node: BinaryOpNode = testSingleExpressionParse(expression: expression) {
             do {
-                try Calculator.TheCalculator.evaluate(nodes: [node], args: attr)
+                try Calculator.TheCalculator.evaluate(nodes: [node], this: attr)
                 XCTAssert(!Calculator.TheCalculator.hasValue())          // stack is not empty
                 XCTAssert(try attr.get(for: "x")?.asInt() == actual)
                 return
@@ -518,7 +518,7 @@ class CalculatorTests: XCTestCase {
     private func testIncrDecr(expression: String, attr: Attribution, actual: Int) {
         if let node: UnaryOpNode = testSingleExpressionParse(expression: expression) {
             do {
-                try Calculator.TheCalculator.evaluate(nodes: [node], args: attr)
+                try Calculator.TheCalculator.evaluate(nodes: [node], this: attr)
                 XCTAssertEqual(try attr.get(for: "x")?.asInt(), actual)
                 return
             }
@@ -553,7 +553,7 @@ class CalculatorTests: XCTestCase {
     
     private func testEvaluate<T>(node: ExprNode, args: Attribution) -> T? {
         do {
-            try Calculator.TheCalculator.evaluate(nodes: [node], args: args)
+            try Calculator.TheCalculator.evaluate(nodes: [node], this: args)
             XCTAssert(Calculator.TheCalculator.hasValue())          // stack is not empty
             let actual = try Calculator.TheCalculator.value()!.asType(T.self)
             

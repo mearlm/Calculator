@@ -21,7 +21,7 @@ class AddressTests: XCTestCase {
         let x0 = Attribution()
         x0.add(for: "a", value: x1)
         
-        return (x0, Address("a.b.c")!)
+        return (x0, Address(["a", "b", "c"])!)
     }
     func setBadAddress() -> (root: Attribution, addr: Address) {
         let x2 = Attribution()
@@ -33,7 +33,7 @@ class AddressTests: XCTestCase {
         let x0 = Attribution()
         x0.add(for: "a", value: x1)
         
-        return (x0, Address("a.b.c")!)
+        return (x0, Address(["a", "b", "c"])!)
     }
 
     override func setUp() {
@@ -145,19 +145,19 @@ class AddressTests: XCTestCase {
     
     func testAddressEquality() {
         let testValue = setAddress()
-        let otherValue = Address("a.b.c")
+        let otherValue = Address(["a", "b", "c"])
         XCTAssert(testValue.addr == otherValue)
         
-        let longValue = Address("a.b.c.d")
+        let longValue = Address(["a", "b", "c", "d"])
         XCTAssert(testValue.addr != longValue)
         
-        let shortValue = Address("a.b")
+        let shortValue = Address(["a", "b"])
         XCTAssert(testValue.addr != shortValue)
         
-        let similarValue = Address("a.d.c")
+        let similarValue = Address(["a", "d", "c"])
         XCTAssert(testValue.addr != similarValue)
 
-        let badValue = Address("x.y.z")
+        let badValue = Address(["x", "y", "z"])
         XCTAssert(testValue.addr != badValue)
     }
 

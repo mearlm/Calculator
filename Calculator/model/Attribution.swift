@@ -10,7 +10,7 @@ import Foundation
 
 // dictionaries of variously typed attribute values, accessable by address
 open class Attribution : Subject, Equatable {
-    private var attributes = [String : Attributable]()
+    var attributes = [String : Attributable]()
 
     override
     public init() {
@@ -43,9 +43,9 @@ open class Attribution : Subject, Equatable {
     private func fullPath(key: String) -> Address {
         var parts: [String] = []
         if let address = self.getAddress() {
-            parts = Address.splitKey(address: address.asString())
+            parts = address.asParts()
         }
-        return Address(Address.composeKey(path: parts, key: key))!
+        return Address(parts + [key])!
     }
     
     @discardableResult
@@ -65,7 +65,7 @@ open class Attribution : Subject, Equatable {
     }
     
     @discardableResult
-    public func add<T>(for key: String, value: T?) -> Attribution {
+    public func add<T: Equatable>(for key: String, value: T?) -> Attribution {
         return self.add(for: key, value: (nil == value) ? nil : Attribute(value!))
     }
     
@@ -118,8 +118,4 @@ open class Attribution : Subject, Equatable {
         }
         return lhs.isEqual(other: rhs)
     }
-}
-
-public protocol Attributed {
-    var attributes: Attribution { get }
 }

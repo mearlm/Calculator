@@ -53,6 +53,7 @@ public enum AttributionError : LocalizedError {
 
 public protocol Attributable {
     func rawValue() -> Any
+    func valueType() -> Any
     func asInt() throws -> Int
     func asString() throws -> String
     func asBool() throws -> Bool
@@ -60,15 +61,15 @@ public protocol Attributable {
     func asAddress() throws -> Address
     func asAttribution() throws -> Attribution
     func asDistribution<E: Equatable>(of: E.Type) throws -> Distribution<E>
-    func asContainer<E: Equatable>(of ctype: E.Type) throws -> Container<E>
-    func asCollection() throws -> AnyCollection<Attributed>?
+    func asContainer() throws -> Container
+    //func asCollection() throws -> AnyCollection<Attribution>?
     func asType<E>(_ type: E.Type) throws -> E
     func isEqual(other: Attributable) -> Bool
     
     func describe(resolve: Bool, within: Attribution?) throws -> String
 }
 
-public struct Attribute<T> : Attributable {
+public struct Attribute<T: Equatable> : Attributable {
     let value: T
     
     public init(_ value: T) {
@@ -84,6 +85,10 @@ public struct Attribute<T> : Attributable {
     
     public func rawValue() -> Any {
         return value
+    }
+    
+    public func valueType() -> Any {
+        return type(of: value as Any)
     }
     
     // for attribute types not specified explicitly:
@@ -119,15 +124,8 @@ public struct Attribute<T> : Attributable {
         return try tryCast(as: Distribution<E>.self)
     }
 
-    public func asContainer<E: Equatable>(of ctype: E.Type) throws -> Container<E> {
-        return try tryCast(as: Container<E>.self)
-    }
-    
-    public func asCollection() -> AnyCollection<Attributed>? {
-        if let result = value as? AnyCollection<Attributed> {
-            return result
-        }
-        return nil
+    public func asContainer() throws -> Container {
+        return try tryCast(as: Container.self)
     }
 
 //    public func asAction() throws -> Action {

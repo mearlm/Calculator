@@ -9,7 +9,7 @@
 import Foundation
 
 //public protocol Container: AnyObject {
-//    associatedtype T : Attributed
+//    associatedtype T : Attribution
 //
 //    var things: [T] { get set }
 //    var capacity: Int { get }
@@ -23,7 +23,7 @@ import Foundation
 //}
 
 // collections of similarly typed things, accessible by address
-open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection {
+open class Container: Subject, Equatable, Collection {
     internal static var THING : String {
         get { return "[things]" }     // address key => member of a collection
     }
@@ -31,7 +31,7 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
         get { return -1 }
     }
 
-    public var things: [T]
+    public var things: [Attribution]
     public var capacity: Int
     
     public init(size: Int) {
@@ -43,13 +43,13 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
         _id = Attribution.getNextId()
     }
 
-    public convenience init(things: [T], parent: Addressable?) {
+    public convenience init(things: [Attribution], parent: Addressable?) {
         self.init(size: things.count)
         self.things = things
         self._parent = parent
     }
     
-    public convenience init?(things: [T], size: Int, parent: Addressable?) {
+    public convenience init?(things: [Attribution], size: Int, parent: Addressable?) {
         guard size >= things.count else {
             return nil
         }
@@ -60,19 +60,17 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
     private func fullPath(index: Int) -> Address {
         var parts: [String] = []
         if let address = self.getAddress() {
-            parts = Address.splitKey(address: address.asString())
+            parts = address.asParts()
         }
-        return Address(Address.composeKey(path: parts, key: "@\(index)"))!
+        return Address(parts + ["@\(index)"])!
     }
 
     @discardableResult
-    public func add(thing: T) -> Bool {
+    public func add(thing: Attribution) -> Bool {
         guard capacity == Container.UNLIMITED || things.count < capacity else {
             return false
         }
-        if var child = thing as? Addressable {
-            child.reparent(parent: self)
-        }
+        thing.reparent(parent: self)
         things.append(thing)
 
         notify(at: fullPath(index: things.count-1), was: nil)
@@ -80,7 +78,7 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
     }
     
     @discardableResult
-    public func remove(thing: T) -> Bool {
+    public func remove(thing: Attribution) -> Bool {
         if let index = things.firstIndex(of: thing) {
             if let previous = things.remove(at: index) as? Attributable {
                 notify(at: fullPath(index: things.count-1), was: previous)
@@ -95,17 +93,14 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
     public func findChildKey(for childId: Int) -> String? {
         // look in the things collection to see if the child is present
         let found = self.things.filter {
-            if let value = $0 as? Addressable {
-                return childId == value.getUniqueId()
-            }
-            return false
+            return childId == $0.getUniqueId()
         }
         return (!found.isEmpty) ? "\(Container.THING):\(childId)" : nil
     }
 
     // NB: the original container is not changed
-    public func shuffle() -> [T] {
-        var shuffled: [T] = []
+    public func shuffle() -> [Attribution] {
+        var shuffled: [Attribution] = []
         var indexes = self.things.enumerated().map { $0.offset }
         while (indexes.count > 0) {
             let ix = Calculator.rand(indexes.count)
@@ -116,15 +111,15 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
     }
     
     // NB: the original container is not changed
-    public func sort(by keys: String...) throws -> [T] {
+    public func sort(by keys: String...) throws -> [Attribution] {
         let sorted = try self.things.sorted {
             var key0: String = ""
             var key1: String = ""
             for key in keys {
-                if let val0 = $0.attributes.get(for: key),
-                    let val1 = $1.attributes.get(for: key) {
-                    key0 += try val0.describe(resolve: true, within: $0.attributes) + ":"
-                    key1 += try val1.describe(resolve: true, within: $1.attributes) + ":"
+                if let val0 = $0.get(for: key),
+                    let val1 = $1.get(for: key) {
+                    key0 += try val0.describe(resolve: true, within: $0) + ":"
+                    key1 += try val1.describe(resolve: true, within: $1) + ":"
                 }
             }
             return key0 < key1
@@ -133,11 +128,11 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
         return sorted
     }
     
-    public func find(matching: (key: String, value: Any)...) -> [T] {
+    public func find<E: Equatable>(matching: (key: String, value: E)...) -> [Attribution] {
         var found = things
         for identifier in matching {
             found = found.filter {
-                if let value = $0.attributes.get(for: identifier.key) {
+                if let value = $0.get(for: identifier.key) {
                     return Attribute(identifier.value).isEqual(other: value)
                 }
                 return false
@@ -146,7 +141,7 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
         return found
     }
     
-    internal func isEqual(other: Container<T>) -> Bool {
+    internal func isEqual(other: Container) -> Bool {
         guard self.things.count == other.things.count else {
             return false
         }
@@ -175,11 +170,11 @@ open class Container<T: Attributed & Equatable>: Subject, Equatable, Collection 
         return things.index(after: index)
     }
     
-    public subscript(position: Int) -> T {
+    public subscript(position: Int) -> Attribution {
         return things[position]
     }
     
-    public static func == (lhs: Container<T>, rhs: Container<T>) -> Bool {
+    public static func == (lhs: Container, rhs: Container) -> Bool {
         if (lhs === rhs) {
             return true
         }
